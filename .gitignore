@@ -12,7 +12,8 @@ oauth/
 instagram_session*
 
 # ---- pipeline data (large, regenerable, may contain scraped PII) ----
-data/
+data/*
+!data/rpm_table.csv
 renders/
 output/
 assets/
