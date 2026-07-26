@@ -31,3 +31,6 @@ venv/
 
 # ---- misc ----
 .DS_Store
+
+# claude worktrees
+.claude/worktrees/
