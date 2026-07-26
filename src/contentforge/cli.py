@@ -19,6 +19,12 @@ from contentforge.errors import (
     ResourceNotFoundError,
 )
 from contentforge.providers.quota import QuotaLedger
+from contentforge.providers.quota_monitor import (
+    DEFAULT_QUOTA_ID,
+    SEARCH_QUOTA_ID,
+    from_local_ledger,
+    read_authoritative_usage,
+)
 from contentforge.providers.quota_store import (
     estimate_run_cost,
     load_ledger,
@@ -200,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
         "--videos-per-channel", type=int, default=DEFAULT_VIDEOS_PER_CHANNEL
     )
 
+    subparsers.add_parser("quota", help="show quota usage, local and authoritative")
+
     verify = subparsers.add_parser(
         "verify", help="check a claimed channel statistic against the API"
     )
@@ -217,6 +225,21 @@ def main(argv: list[str] | None = None) -> int:
     api_key, ledger_path = _credential(args.profile)
 
     client_for = lambda: YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
+
+    if args.command == "quota":
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        local = from_local_ledger(ledger.spent, ledger.daily_limit)
+        print(f"Quota for {quota_date(now)} (profile: {args.profile or 'default'})\n")
+        print(f"  local forecast   {local.spent:,} of {local.limit:,} "
+              f"({local.remaining:,} remaining)")
+        print(f"                   {local.detail}\n")
+        for quota_id in (DEFAULT_QUOTA_ID, SEARCH_QUOTA_ID):
+            reading = read_authoritative_usage(now, quota_id)
+            value = f"{reading.spent:,}" if reading.is_known else "UNKNOWN"
+            print(f"  {quota_id:<24} {value}")
+            print(f"                   {reading.detail}")
+        return 0
 
     if args.command == "verify":
         client = client_for()
@@ -249,10 +272,25 @@ def main(argv: list[str] | None = None) -> int:
         niches=niche_count, queries_per_niche=2,
         channels_per_niche=args.channels_per_niche,
     )
-    print(
-        f"Quota for {quota_date(now)}: {ledger.spent:,} spent, "
-        f"{ledger.remaining:,} remaining. This run needs ~{estimated:,}."
-    )
+    authoritative = read_authoritative_usage(now)
+    if authoritative.is_known:
+        print(
+            f"Quota for {quota_date(now)}: {authoritative.spent:,} spent "
+            f"(Cloud Monitoring). This run needs ~{estimated:,}."
+        )
+        if authoritative.spent + estimated > ledger.daily_limit:
+            raise SystemExit(
+                f"run needs ~{estimated:,} units but Cloud Monitoring reports "
+                f"{authoritative.spent:,} of {ledger.daily_limit:,} already spent today"
+            )
+    else:
+        print(
+            f"Quota for {quota_date(now)}: {ledger.spent:,} spent per the LOCAL "
+            f"forecast. This run needs ~{estimated:,}.\n"
+            f"  WARNING: authoritative usage unavailable - {authoritative.detail}\n"
+            f"  The local figure counts only calls this pipeline recorded, so the "
+            f"real remaining quota may be far lower."
+        )
     require_headroom(ledger, estimated)
 
     try:
