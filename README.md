@@ -11,6 +11,24 @@ Status: **design phase**. See `docs/superpowers/specs/` for the current design.
 3. **Structure varies per video.** No fixed script template.
 4. **Scraping and publishing never share credentials.**
 
+## Running
+
+    python -m venv .venv && .venv/bin/pip install -e .
+    cp .env.example .env        # then put your YOUTUBE_API_KEY in it
+    set -a && . ./.env && set +a
+    pipeline research
+
+Writes `data/research/<date>/report.{json,md}`. Read the markdown — every
+figure links to the API response it came from.
+
+Tests never touch a live API:
+
+    .venv/bin/pytest
+
+## Status
+
+Plan 1 (research engine) implemented. See `docs/superpowers/plans/`.
+
 ## Layout
 
     providers/   API clients (YouTube, Instagram, Threads, LLM)
