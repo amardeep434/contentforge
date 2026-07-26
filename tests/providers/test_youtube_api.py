@@ -299,3 +299,33 @@ def test_parse_iso8601_duration_still_rejects_empty_and_garbage():
     for bad in ("", "banana", "5M30S"):
         with pytest.raises(MissingDataError):
             parse_iso8601_duration(bad)
+
+
+def test_videos_without_duration_are_excluded_not_fatal():
+    """Live streams in progress carry no duration. One such item must not abort
+    the run, and it must not be silently counted as a normal video."""
+
+    def transport(endpoint, params):
+        return {
+            "etag": "vid-3",
+            "items": [
+                {
+                    "id": "live",
+                    "snippet": {"channelId": "UC_a", "title": "t",
+                                "publishedAt": "2026-07-01T00:00:00Z"},
+                    "statistics": {"viewCount": "10"},
+                    "contentDetails": {},
+                },
+                {
+                    "id": "normal",
+                    "snippet": {"channelId": "UC_a", "title": "t",
+                                "publishedAt": "2026-07-01T00:00:00Z"},
+                    "statistics": {"viewCount": "10"},
+                    "contentDetails": {"duration": "PT4M"},
+                },
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    videos, _ledger = client.get_videos(["live", "normal"], QuotaLedger())
+    assert [v.video_id for v in videos] == ["normal"]

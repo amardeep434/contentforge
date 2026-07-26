@@ -251,6 +251,12 @@ class YouTubeClient:
             for item in body.get("items") or []:
                 snippet = _require(item, "snippet", "video")
                 details = _require(item, "contentDetails", "video")
+                # In-progress live streams and region-blocked items carry no
+                # duration. Such a video cannot be characterised, so it is
+                # excluded from the sample rather than guessed at. The drop is
+                # visible to callers as a shortfall against len(video_ids).
+                if "duration" not in details:
+                    continue
                 # viewCount is absent on brand-new videos. That is a genuine
                 # zero, not missing data, so it must not raise.
                 statistics = item.get("statistics") or {}
