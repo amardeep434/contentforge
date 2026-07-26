@@ -150,6 +150,8 @@ Roughly 12–15 categories: finance, tech, education, health, gaming, true crime
 
 `memberships_available` exists because of Made for Kids. COPPA bars behavioural tracking on under-13 content, so only contextual ads serve (RPM $1–3 against $20–40 for finance), and **Super Thanks and Channel Memberships are disabled at platform level**. That removes the Tier 1 revenue path entirely, and YouTube's automated classifier applies the restriction retroactively to back catalogues. The scorer penalises restricted niches accordingly rather than the operator arguing about it — if kids still ranks well despite the penalty, it earns the slot on evidence.
 
+**RPM sources disagree, and each row cites exactly one.** Published RPM figures vary materially between sources — tech is $15-25 in one and $8-15 in another. Each row therefore names the single source it came from rather than blending. The ranking is comparative, so a consistent bias across rows matters less than relative order; a source that systematically over-rates one niche would distort it, which is why rows are spread across five independent sources.
+
 **Seed queries must be long-tail.** Head terms ("index funds", "ai tools") return the same incumbents for every niche, which is what defeated the first version. Narrow queries are where competitive structure actually varies.
 
 ## 9. Sampling scale and quota
