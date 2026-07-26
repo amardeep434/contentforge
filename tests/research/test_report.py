@@ -84,3 +84,22 @@ def test_niche_without_profiles_gets_no_change_section(tmp_path):
 def test_empty_scores_raise(tmp_path):
     with pytest.raises(MissingDataError):
         write_report([], {}, {}, tmp_path, NOW)
+
+
+def test_change_section_leads_with_aggregate_counts(tmp_path):
+    profiles = [
+        ChangeProfile(600, 60, 5.0, 2.0, 8, 12),
+        ChangeProfile(700, 70, 5.0, 2.0, 8, 12),
+        ChangeProfile(100, 900, 5.0, 9.0, 8, 6),
+    ]
+    _, md_path = write_report([a_score()], {"finance": profiles}, {}, tmp_path, NOW)
+    text = md_path.read_text()
+    assert "Across 3 breakout channels" in text
+    assert "2 shorter, 1 longer" in text
+    assert "2 faster, 1 slower" in text
+
+
+def test_change_section_renders_sub_day_cadence(tmp_path):
+    profiles = [ChangeProfile(600, 60, 0.25, 0.5, 8, 9)]
+    _, md_path = write_report([a_score()], {"finance": profiles}, {}, tmp_path, NOW)
+    assert "0.2d → 0.5d" in md_path.read_text()

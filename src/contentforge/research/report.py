@@ -12,6 +12,7 @@ from pathlib import Path
 
 from contentforge.errors import MissingDataError
 from contentforge.provenance import Fact
+from contentforge.research.changes import summarise_changes
 from contentforge.research.score import NicheScore
 
 MAX_CHANGE_EXAMPLES = 10
@@ -56,14 +57,42 @@ def _ranking_table(scores: list[NicheScore]) -> list[str]:
 
 
 def _change_section(niche: str, profiles: list) -> list[str]:
-    lines = [f"## What changed at breakout — {niche}", ""]
+    """Aggregate first, then a few examples.
+
+    Per-channel lines alone were unreadable noise in the first live run: a
+    single channel shortening its videos means nothing. The counts below are
+    where a consistent direction would actually show up.
+    """
+    summary = summarise_changes(profiles)
+    if summary is None:
+        return []
+
+    lines = [
+        f"## What changed at breakout — {niche}",
+        "",
+        f"Across {summary.channels} breakout channels:",
+        "",
+        f"- **Duration:** {summary.duration_shorter} shorter, "
+        f"{summary.duration_longer} longer, {summary.duration_unchanged} unchanged "
+        f"(median ratio {summary.median_duration_ratio:.2f}×)",
+        f"- **Cadence:** {summary.cadence_faster} faster, "
+        f"{summary.cadence_slower} slower, {summary.cadence_unchanged} unchanged",
+        f"- **Title length:** median {summary.median_title_word_delta:+.1f} words",
+        "",
+        "<details><summary>Per-channel detail</summary>",
+        "",
+    ]
     for profile in profiles[:MAX_CHANGE_EXAMPLES]:
         lines.append(
             f"- duration {profile.duration_before}s → {profile.duration_after}s; "
-            f"cadence {profile.cadence_days_before}d → {profile.cadence_days_after}d; "
-            f"title {profile.title_words_before:.0f} → {profile.title_words_after:.0f} words"
+            f"cadence {profile.cadence_days_before:.1f}d → "
+            f"{profile.cadence_days_after:.1f}d; "
+            f"title {profile.title_words_before:.0f} → "
+            f"{profile.title_words_after:.0f} words"
         )
     lines += [
+        "",
+        "</details>",
         "",
         "_These changes coincided with the inflection. Retention, traffic source "
         "and thumbnail click-through are not available for other channels, so "
