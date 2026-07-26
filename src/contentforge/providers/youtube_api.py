@@ -26,8 +26,11 @@ MAX_IDS_PER_CALL = 50
 
 Transport = Callable[[str, dict], dict]
 
+# The time part is optional: live streams and upcoming premieres report "P0D",
+# which is a real duration of zero rather than missing data.
 _DURATION = re.compile(
-    r"^P(?:(?P<days>\d+)D)?T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?$"
+    r"^P(?:(?P<days>\d+)D)?"
+    r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$"
 )
 
 

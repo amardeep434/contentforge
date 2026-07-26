@@ -287,3 +287,15 @@ def test_get_videos_tolerates_missing_view_count_as_zero_not_error():
     client = YouTubeClient(api_key="k", transport=transport)
     videos, _ledger = client.get_videos(["v1"], QuotaLedger())
     assert videos[0].view_count.value == 0
+
+
+def test_parse_iso8601_duration_accepts_live_stream_p0d():
+    """Live streams and upcoming premieres report P0D - a real zero, not an error."""
+    assert parse_iso8601_duration("P0D") == 0
+    assert parse_iso8601_duration("P1D") == 86400
+
+
+def test_parse_iso8601_duration_still_rejects_empty_and_garbage():
+    for bad in ("", "banana", "5M30S"):
+        with pytest.raises(MissingDataError):
+            parse_iso8601_duration(bad)
