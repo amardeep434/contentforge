@@ -10,8 +10,10 @@ This module persists the ledger keyed on the Pacific date, so a run can check
 its headroom before spending anything.
 """
 
+import fcntl
 import json
-from dataclasses import replace
+import os
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -34,33 +36,68 @@ def quota_date(now: datetime) -> date:
     return now.astimezone(QUOTA_RESET_ZONE).date()
 
 
+@contextmanager
+def _locked(path: Path):
+    """Hold an exclusive lock on a sidecar file for a read-modify-write."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_suffix(path.suffix + ".lock")
+    handle = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        os.close(handle)
+
+
+def _read_spent(path: Path, today: str) -> int:
+    """Spend recorded on disk for `today`, or 0 if absent or stale."""
+    if not path.exists():
+        return 0
+    try:
+        record = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return 0
+    if record.get("date") != today:
+        # Stale file from a previous day: the API counter has already reset.
+        return 0
+    return int(record.get("spent", 0))
+
+
 def load_ledger(
     path: Path, now: datetime, daily_limit: int = 10_000
 ) -> QuotaLedger:
     """Load today's ledger, or a fresh one if the Pacific date has rolled over."""
-    today = quota_date(now)
-    if not path.exists():
-        return QuotaLedger(daily_limit=daily_limit)
-
-    record = json.loads(path.read_text())
-    if record.get("date") != today.isoformat():
-        # Stale file from a previous day: the API counter has already reset.
-        return QuotaLedger(daily_limit=daily_limit)
-    return QuotaLedger(daily_limit=daily_limit, spent=int(record.get("spent", 0)))
+    with _locked(path):
+        return QuotaLedger(
+            daily_limit=daily_limit,
+            spent=_read_spent(path, quota_date(now).isoformat()),
+        )
 
 
-def save_ledger(path: Path, ledger: QuotaLedger, now: datetime) -> None:
-    """Write the ledger atomically so a crash mid-write cannot corrupt it."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "date": quota_date(now).isoformat(),
-        "spent": ledger.spent,
-        "daily_limit": ledger.daily_limit,
-        "updated_at": now.isoformat(),
-    }
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(payload, indent=2))
-    temp.replace(path)
+def save_ledger(
+    path: Path, ledger: QuotaLedger, now: datetime, started_at: int = 0
+) -> None:
+    """Add this run's spend to whatever is on disk, under a lock.
+
+    Overwriting with an absolute figure loses concurrent runs' spend, and the
+    loss is always an undercount - the one direction that breaks the guarantee.
+    So the delta this run consumed is added to the current on-disk value
+    instead, and the whole read-modify-write is serialised.
+    """
+    today = quota_date(now).isoformat()
+    delta = max(ledger.spent - started_at, 0)
+    with _locked(path):
+        total = _read_spent(path, today) + delta
+        payload = {
+            "date": today,
+            "spent": total,
+            "daily_limit": ledger.daily_limit,
+            "updated_at": now.isoformat(),
+        }
+        temp = path.with_suffix(path.suffix + ".tmp")
+        temp.write_text(json.dumps(payload, indent=2))
+        temp.replace(path)
 
 
 def estimate_run_cost(

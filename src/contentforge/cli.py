@@ -222,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         client = client_for()
         now = datetime.now(timezone.utc)
         ledger = load_ledger(ledger_path, now)
+        started_at = ledger.spent
         try:
             for handle in args.handles:
                 check, ledger = check_claim(
@@ -233,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             # Persist on failure too: units charged before a transport error
             # may already be gone from the real counter.
-            save_ledger(ledger_path, ledger, now)
+            save_ledger(ledger_path, ledger, now, started_at)
         print(f"({ledger.spent:,} of {ledger.daily_limit:,} quota units used today)")
         return 0
 
@@ -242,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     client = YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
 
     ledger = load_ledger(ledger_path, now)
+    started_at = ledger.spent
     niche_count = len(load_niches(Path("data/niches.csv")))
     estimated = estimate_run_cost(
         niches=niche_count, queries_per_niche=2,
@@ -268,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         # Persist whatever was spent, including on a failed run - those units
         # are gone from the real counter either way.
-        save_ledger(ledger_path, ledger, now)
+        save_ledger(ledger_path, ledger, now, started_at)
 
     print(
         f"Wrote {len(ranked)} ranked niches to {out_dir} "

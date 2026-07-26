@@ -82,3 +82,53 @@ def test_headroom_error_names_the_reset_zone():
     with pytest.raises(QuotaExceededError) as excinfo:
         require_headroom(QuotaLedger(spent=9999), estimated=500)
     assert "America/Los_Angeles" in str(excinfo.value)
+
+
+# --- concurrency ------------------------------------------------------------
+
+def test_concurrent_runs_do_not_lose_spend(tmp_path):
+    """Two runs each spending 100 must total 200, not 100.
+
+    Overwriting with an absolute figure loses the loser's spend, and the loss
+    is always an undercount - the one direction that breaks the guarantee.
+    """
+    now = datetime(2026, 7, 26, 20, 0, tzinfo=timezone.utc)
+    path = tmp_path / "quota.json"
+
+    a = load_ledger(path, now); a_start = a.spent
+    b = load_ledger(path, now); b_start = b.spent      # both read 0
+    a = QuotaLedger(spent=a_start + 100)
+    b = QuotaLedger(spent=b_start + 100)
+
+    save_ledger(path, a, now, a_start)
+    save_ledger(path, b, now, b_start)
+
+    assert load_ledger(path, now).spent == 200
+
+
+def test_a_stale_writer_cannot_move_the_ledger_backwards(tmp_path):
+    """The bug observed live: a stalled run finished and wrote its old state
+    over a newer value, dropping the ledger from 1 back to 0."""
+    now = datetime(2026, 7, 26, 20, 0, tzinfo=timezone.utc)
+    path = tmp_path / "quota.json"
+
+    stale = load_ledger(path, now); stale_start = stale.spent   # reads 0
+    save_ledger(path, QuotaLedger(spent=5), now, 0)             # a later run records 5
+    save_ledger(path, stale, now, stale_start)                  # stale writer lands late
+
+    assert load_ledger(path, now).spent == 5, "must not regress"
+
+
+def test_delta_is_never_negative(tmp_path):
+    now = datetime(2026, 7, 26, 20, 0, tzinfo=timezone.utc)
+    path = tmp_path / "quota.json"
+    save_ledger(path, QuotaLedger(spent=10), now, 0)
+    save_ledger(path, QuotaLedger(spent=3), now, 99)   # nonsense start
+    assert load_ledger(path, now).spent == 10
+
+
+def test_corrupt_ledger_file_is_treated_as_empty(tmp_path):
+    now = datetime(2026, 7, 26, 20, 0, tzinfo=timezone.utc)
+    path = tmp_path / "quota.json"
+    path.write_text("{not json")
+    assert load_ledger(path, now).spent == 0

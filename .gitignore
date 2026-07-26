@@ -35,3 +35,6 @@ venv/
 
 # claude worktrees
 .claude/worktrees/
+
+# quota lock sidecars
+data/quota/*.lock
