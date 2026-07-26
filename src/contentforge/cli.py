@@ -25,6 +25,7 @@ from contentforge.research.niches import load_niches, rpm_midpoint_usd
 from contentforge.research.report import write_report
 from contentforge.research.score import NicheScore, rank, score_niche
 from contentforge.research.trajectory import MIN_SIDE_VIDEOS, build_trajectory
+from contentforge.research.verify import check_claim, format_check
 
 MIN_VIDEOS_FOR_TRAJECTORY = MIN_SIDE_VIDEOS * 2
 DEFAULT_CHANNELS_PER_NICHE = 100
@@ -169,11 +170,39 @@ def main(argv: list[str] | None = None) -> int:
     research.add_argument(
         "--videos-per-channel", type=int, default=DEFAULT_VIDEOS_PER_CHANNEL
     )
+
+    verify = subparsers.add_parser(
+        "verify", help="check a claimed channel statistic against the API"
+    )
+    verify.add_argument("handles", nargs="+", help="channel @handles")
+    verify.add_argument(
+        "--claimed-views", type=int, default=None,
+        help="view count asserted by the source, to compare against",
+    )
+    verify.add_argument(
+        "--rpm", type=float, default=None,
+        help="assumed RPM for an implied earnings figure (never a measurement)",
+    )
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if not api_key:
         raise SystemExit("YOUTUBE_API_KEY is not set (copy .env.example to .env)")
+
+    client_for = lambda: YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
+
+    if args.command == "verify":
+        client = client_for()
+        ledger = QuotaLedger()
+        for handle in args.handles:
+            check, ledger = check_claim(
+                client, handle, ledger,
+                claimed_views=args.claimed_views, assumed_rpm=args.rpm,
+            )
+            print(format_check(check))
+            print()
+        print(f"({ledger.spent} quota units used)")
+        return 0
 
     now = datetime.now(timezone.utc)
     out_dir = args.out / now.date().isoformat()

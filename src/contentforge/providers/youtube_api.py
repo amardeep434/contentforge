@@ -196,6 +196,43 @@ class YouTubeClient:
             )
         return stats, current
 
+    def channel_by_handle(
+        self, handle: str, ledger: QuotaLedger
+    ):
+        """Resolve one channel by @handle. Costs 1 unit.
+
+        channels.list with forHandle costs 1 unit against search.list's 100 and
+        returns the exact channel rather than a best guess.
+        """
+        from contentforge.research.verify import ChannelFacts
+
+        params = {"forHandle": handle, "part": "snippet,statistics"}
+        charged = ledger.charge("channels.list")
+        body = self._transport("channels.list", params)
+        prov = _provenance("channels.list", params, body)
+
+        items = body.get("items") or []
+        if not items:
+            raise MissingDataError(f"no channel found for handle @{handle}")
+
+        item = items[0]
+        snippet = _require(item, "snippet", "channel")
+        statistics = _require(item, "statistics", "channel")
+        published_raw = _require(snippet, "publishedAt", "channel snippet")
+        return (
+            ChannelFacts(
+                channel_id=_require(item, "id", "channel"),
+                title=_require(snippet, "title", "channel snippet"),
+                subscribers=Fact(int(statistics.get("subscriberCount", 0)), prov),
+                view_count=Fact(int(_require(statistics, "viewCount", "statistics")), prov),
+                video_count=Fact(int(_require(statistics, "videoCount", "statistics")), prov),
+                published_at=Fact(
+                    datetime.fromisoformat(published_raw.replace("Z", "+00:00")), prov
+                ),
+            ),
+            charged,
+        )
+
     def get_uploads_playlists(
         self, channel_ids: list[str], ledger: QuotaLedger
     ) -> tuple[dict[str, str], QuotaLedger]:
