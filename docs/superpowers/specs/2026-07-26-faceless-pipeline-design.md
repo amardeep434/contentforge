@@ -90,7 +90,18 @@ review/                          approve/reject gate (Plan 3)
 provenance.py                    record type + validator, used by everything
 ```
 
-## 7. Research method
+## 7. Research method — SUPERSEDED
+
+> **This approach was built twice and failed both times.** See
+> `docs/findings/2026-07-26-research-engine-negative-result.md`. Revision 1's metrics were
+> bounded by our own sample size; revision 2's velocity ratio is confounded by view
+> front-loading — verified against a mature channel that scored a 3.0x "breakout" while its
+> raw view counts were declining. Separating "this channel improved" from "this video is
+> newer" needs per-video history at matched ages, which the API does not expose.
+>
+> Niche selection now falls back to RPM plus what the operator can sustain. The section is
+> kept because the quota accounting and the client it describes are still in use.
+
 
 The first version of this engine measured **states** — how big are the channels in a niche, how many are there. That failed: search returns the incumbents for every query, so competitor counts were bounded by our own sample size and every niche looked identically saturated. The ranking collapsed to an RPM lookup.
 
@@ -193,7 +204,46 @@ These weights remain a hypothesis. If a run ranks something obviously wrong, sus
 
 The first version embedded all 50 channel ids in every provenance URL, producing ~3,000-character source links and an unreadable report. Fixed: markdown cites the response **etag** and links to the raw response stored under `data/research/<date>/raw/<etag>.json`. Full auditability, readable output.
 
-## 12. Failure handling
+## 12. Creator-claim verification, and the Threads path
+
+The one research method that produced evidence today: take channels named in creator
+marketing, and check each against the API.
+
+**The asymmetry that makes it work.** View, subscriber and video counts are public and
+retrievable for any channel. Revenue is exposed only to the channel owner. So a post
+showing both can have half of it confirmed — and posts routinely format the two
+identically, so an earnings figure computed as `views x assumed_RPM` reads as though it
+were measured. Confirming views never confirms revenue.
+
+Implemented as `pipeline verify @handle --claimed-views N --rpm R`. Handle lookup costs
+**1 quota unit** against a search's 100. Implied earnings require an explicit `--rpm` and
+are labelled as arithmetic. Workflow captured in `.claude/skills/verify-creator-claims/`.
+
+### Threads access: browser now, API later
+
+Reading Threads through the Chrome extension with the operator's logged-in session is a
+**stopgap**, not the design. It does not scale, it cannot be scheduled, and automating
+collection at volume through it would violate Meta's ToS.
+
+The destination is the official Threads API, which does support this:
+
+- `GET /keyword_search` with a keyword, or `search_mode=TAG` for topic tags — the tag feed
+  is exactly what was browsed manually (`serp_type=tags`).
+- Requires `threads_basic` plus `threads_keyword_search`.
+- **Without App Review approval the endpoint returns only the authenticated user's own
+  posts.** Public-post search requires advanced access, and may additionally require
+  business verification.
+- Free; no paid tier.
+
+This adds two permissions to the same App Review submission as the Instagram publishing
+scopes (§16). Submitting them together saves a review cycle, so the Threads permissions
+should go in now even though the consumer is built later.
+
+`providers/threads_research.py` stays unimplemented until that approval lands. Until then
+the browser workflow is operator-driven and manual, and the research report records
+"Threads: not collected" rather than implying coverage.
+
+## 13. Failure handling
 
 Governing rule: **fail loudly, write nothing.** No stage emits partial or synthesised output when an input is missing.
 
@@ -202,7 +252,7 @@ Governing rule: **fail loudly, write nothing.** No stage emits partial or synthe
 - Renders write to a temp path and move on success, so a crash cannot leave a half-video that looks finished.
 - `instagrapi` login challenge or ban disables the research stage and alerts. It never falls back to cached or invented Instagram data, and never touches publishing credentials.
 
-## 13. Testing
+## 14. Testing
 
 Concentrated where the money and the risk are.
 
@@ -213,22 +263,25 @@ Concentrated where the money and the risk are.
 
 Deliberately not tested heavily: LLM output quality. It is non-deterministic, and the validator already enforces the properties that matter.
 
-## 14. Out of scope (YAGNI)
+## 15. Out of scope (YAGNI)
 
 Cut from the prior scaffolding, all addable later, none needed to reach first revenue: n8n and its webhook workflows; the multi-provider TTS abstraction (edge-tts is free and adequate); income tracking; a web UI.
 
-## 15. Lead-time actions
+## 16. Lead-time actions
 
 Meta App Review takes 2–4 weeks, with a separate submission per permission and a screencast of the full flow. It costs nothing but calendar time, so it starts immediately and in parallel with implementation.
 
 - [ ] Convert Instagram account to **Business** (Creator accounts cannot publish via API)
 - [ ] Create Meta developer app; link Facebook Page + IG Professional account
 - [ ] Submit `instagram_business_basic` and `instagram_business_content_publish` for review
+- [ ] In the **same** submission, request `threads_basic` and `threads_keyword_search`
+      (advanced access — without it, keyword search returns only your own posts)
+- [ ] Complete business verification if Meta requires it for advanced access
 - [ ] Link Threads profile to the Instagram Professional account
 - [ ] Create Google Cloud project, enable YouTube Data API v3, create OAuth credentials
 - [ ] Create the throwaway Instagram account for research scraping
 
-## 16. Build order
+## 17. Build order
 
 This design is too large for one implementation plan. It decomposes into four, each independently useful and each gated on the previous one working against real data.
 
@@ -236,7 +289,38 @@ This design is too large for one implementation plan. It decomposes into four, e
 
 Plan 1 revision 1 (state-based metrics) was built, run against live data, and failed that gate — competitor count and entrability were bounded by our own sample size, so the ranking reduced to an RPM lookup. Revision 2 replaces state measurement with trajectory analysis (§7).
 
-**Plan 2 — vertical slice to one published Short.** `sourcing/`, `script/` (including the validator), `voice/`, `visuals/`, `render/`, `publish/youtube.py`. One niche, one topic, one video, published. Deliberately narrow: proves the chain end to end and flushes out OAuth, ffmpeg and TTS timing, which are the fiddly integrations.
+**Plan 2 — vertical slice to one published video. Revised toward fewer, better.**
+`sourcing/`, `script/` (including the validator), `voice/`, `visuals/`, `render/`,
+`publish/youtube.py`. One niche, one topic, one video, published.
+
+The original plan assumed volume — 3-5 long-form plus 10-15 Shorts per month. The verified
+data contradicts that:
+
+```
+Explained in minutes    2 videos →  2,475,477 views   1,237,739 views/video   110,000 subs in 5 months
+ENEM                   28 videos →  4,674,845 views     166,959 views/video
+American Legends      193 videos → 14,350,373 views      74,354 views/video
+Its Just Cars!        142 videos →  6,132,088 views      43,184 views/video    17,100 subs in 16 months
+```
+
+A 28x spread in output efficiency across the same faceless format, on four different
+topics. The volume strategy is the *least* efficient row in that table. Cranking output is
+what you do when you cannot tell which videos will work — and it is also precisely the
+shape YouTube's inauthentic-content policy targets.
+
+So Plan 2 optimises per-video quality, not throughput:
+
+- **First milestone is three videos, not thirty.** Each gets real sourcing depth.
+- **Measure before producing more.** Publish, read retention and traffic source from your
+  own Analytics, then decide the next one. That is the feedback loop no amount of public
+  data could provide.
+- **The pipeline is a quality instrument, not a factory.** Throughput features (batching,
+  scheduling, queue management) move to Plan 3 or get cut.
+
+Second-order effect worth stating: at three videos a month the operator can afford to
+actually edit each script, which was ruled out under the volume plan at 1-2 hrs/week. That
+substantially reduces the policy risk flagged in §4 — the differentiation no longer has to
+come entirely from `validate.py`.
 
 **Plan 3 — long-form and volume.** Long-form render path, the review gate CLI, cron scheduling, quota pacing.
 
@@ -244,7 +328,7 @@ Plan 1 revision 1 (state-based metrics) was built, run against live data, and fa
 
 `instagram_research.py` slots into Plan 1 or 3 depending on whether the throwaway account is ready. `threads_research.py` stays unbuilt until there is revenue to justify Apify.
 
-## 17. Open questions
+## 18. Open questions
 
 - Audience geography is deliberately unresolved; the research run decides it.
 - The breakout-detection threshold ratio and the minimum videos either side of an inflection need empirical values. Start strict.
@@ -265,3 +349,5 @@ Plan 1 revision 1 (state-based metrics) was built, run against live data, and fa
 - [Threads publishing API](https://postproxy.dev/blog/how-to-post-to-threads-via-api/)
 - [Instagram Reels API publishing guide](https://postproxy.dev/blog/instagram-reels-api-publishing-guide/)
 - [Instagram Graph API 2026](https://www.netrows.com/blog/instagram-graph-api-guide-2026)
+- [Threads Keyword Search API](https://developers.facebook.com/docs/threads/keyword-search/)
+- [Threads keyword and topic tag search](https://developers.facebook.com/documentation/threads/keyword-search)

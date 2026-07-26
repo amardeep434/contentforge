@@ -1,3 +1,11 @@
+> **SUPERSEDED — implemented, run against live data, failed its gate.** Breakout rate
+> came out at 0.38-0.71 and median lift at 4.8-9.9 across all fifteen niches, and the
+> ranking reverted to RPM order. Root cause: `views / days_since_publish` is confounded
+> by view front-loading, so recent videos always score higher velocity regardless of
+> real performance. See `docs/findings/2026-07-26-research-engine-negative-result.md`.
+> Tasks 1 and 4 (video fetching, niche table) remain in use; the trajectory and scoring
+> tasks are dead code pending a fix that the API may not permit.
+
 # Research Engine (revision 2 — trajectory) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
