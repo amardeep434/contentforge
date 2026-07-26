@@ -1,0 +1,11 @@
+{
+  "etag": "chan-resp-1",
+  "items": [
+    {"id": "UC_finance_a",
+     "snippet": {"title": "Finance A", "publishedAt": "2024-03-01T00:00:00Z"},
+     "statistics": {"subscriberCount": "120000", "videoCount": "210", "viewCount": "18000000"}},
+    {"id": "UC_finance_b",
+     "snippet": {"title": "Finance B", "publishedAt": "2025-09-15T00:00:00Z"},
+     "statistics": {"subscriberCount": "8000", "videoCount": "44", "viewCount": "900000"}}
+  ]
+}
