@@ -24,6 +24,11 @@ API_ROOT = "https://www.googleapis.com/youtube/v3"
 # HTTP 400 "invalidFilters". Verified against the live API.
 MAX_IDS_PER_CALL = 50
 
+# search.list caps at 50 results per call and costs 100 units either way,
+# so asking for fewer wastes the call. Defaulting to 25 was why early runs
+# sampled only a handful of channels per niche.
+MAX_SEARCH_RESULTS = 50
+
 Transport = Callable[[str, dict], dict]
 
 # The time part is optional: live streams and upcoming premieres report "P0D",
@@ -113,7 +118,7 @@ class YouTubeClient:
         self._transport = transport
 
     def search_channels(
-        self, query: str, ledger: QuotaLedger, max_results: int = 25
+        self, query: str, ledger: QuotaLedger, max_results: int = MAX_SEARCH_RESULTS
     ) -> tuple[list[ChannelRef], QuotaLedger]:
         params = {
             "q": query,

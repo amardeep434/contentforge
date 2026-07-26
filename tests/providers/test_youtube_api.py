@@ -329,3 +329,20 @@ def test_videos_without_duration_are_excluded_not_fatal():
     client = YouTubeClient(api_key="k", transport=transport)
     videos, _ledger = client.get_videos(["live", "normal"], QuotaLedger())
     assert [v.video_id for v in videos] == ["normal"]
+
+
+def test_search_requests_the_api_maximum_by_default():
+    """search.list costs 100 units whether it returns 1 result or 50, so
+    asking for fewer wastes the call."""
+    seen = {}
+
+    def transport(endpoint, params):
+        seen.update(params)
+        return {
+            "etag": "e",
+            "items": [{"id": {"channelId": "UC_a"}, "snippet": {"title": "A"}}],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    client.search_channels("q", QuotaLedger())
+    assert seen["maxResults"] == 50
