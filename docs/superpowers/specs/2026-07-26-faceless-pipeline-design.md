@@ -287,7 +287,7 @@ This design is too large for one implementation plan. It decomposes into four, e
 
 **Plan 1 — research engine.** `provenance.py`, `providers/youtube_api.py`, `research/*`. Ends when `pipeline research` produces a ranked report whose every number traces to a real API response. Gate: **if the top-ranked niche is one the operator could have guessed without building this, the engine has told them nothing and needs rework.** Nothing downstream is written until it clears.
 
-Plan 1 revision 1 (state-based metrics) was built, run against live data, and failed that gate — competitor count and entrability were bounded by our own sample size, so the ranking reduced to an RPM lookup. Revision 2 replaces state measurement with trajectory analysis (§7).
+**Both revisions of Plan 1 were built, run against live data, and failed that gate.** Revision 1's competitor count and entrability were bounded by our own sample size; revision 2's velocity ratio is confounded by view front-loading. Niche selection now falls back to RPM plus what the operator can sustain — see §7 and `docs/findings/2026-07-26-research-engine-negative-result.md`. What survives Plan 1 is the provenance core, the quota ledger, the YouTube client, the niche table and `pipeline verify` (§12).
 
 **Plan 2 — vertical slice to one published video. Revised toward fewer, better.**
 `sourcing/`, `script/` (including the validator), `voice/`, `visuals/`, `render/`,
@@ -324,7 +324,7 @@ come entirely from `validate.py`.
 
 **Plan 3 — long-form and volume.** Long-form render path, the review gate CLI, cron scheduling, quota pacing.
 
-**Plan 4 — multi-platform distribution.** `instagram_publish.py`, `threads_publish.py`. Gated on Meta App Review completing (§12), which is why it is last despite starting first in calendar terms.
+**Plan 4 — multi-platform distribution.** `instagram_publish.py`, `threads_publish.py`. Gated on Meta App Review completing (§16), which is why it is last despite starting first in calendar terms. The same submission carries the Threads keyword-search permissions that replace the manual browser workflow (§12).
 
 `instagram_research.py` slots into Plan 1 or 3 depending on whether the throwaway account is ready. `threads_research.py` stays unbuilt until there is revenue to justify Apify.
 
