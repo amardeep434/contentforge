@@ -19,6 +19,13 @@ from contentforge.errors import (
     ResourceNotFoundError,
 )
 from contentforge.providers.quota import QuotaLedger
+from contentforge.providers.quota_store import (
+    estimate_run_cost,
+    load_ledger,
+    quota_date,
+    require_headroom,
+    save_ledger,
+)
 from contentforge.providers.youtube_api import YouTubeClient
 from contentforge.research.changes import describe_change
 from contentforge.research.niches import load_niches, rpm_midpoint_usd
@@ -28,6 +35,23 @@ from contentforge.research.trajectory import MIN_SIDE_VIDEOS, build_trajectory
 from contentforge.research.verify import check_claim, format_check
 
 MIN_VIDEOS_FOR_TRAJECTORY = MIN_SIDE_VIDEOS * 2
+QUOTA_DIR = Path("data/quota")
+
+
+def _credential(profile: str | None) -> tuple[str, Path]:
+    """Resolve the API key and its ledger file for a named profile.
+
+    Profiles exist for key rotation and for genuinely separate registered API
+    Clients. They are NOT a quota pool: the YouTube API Developer Policies
+    require exactly one API Project per API Client, so each profile carries its
+    own independent ledger and the pipeline never fails over between them.
+    """
+    variable = "YOUTUBE_API_KEY" if not profile else f"YOUTUBE_API_KEY_{profile.upper()}"
+    key = os.environ.get(variable)
+    if not key:
+        raise SystemExit(f"{variable} is not set (copy .env.example to .env)")
+    name = profile.lower() if profile else "default"
+    return key, QUOTA_DIR / f"{name}.json"
 DEFAULT_CHANNELS_PER_NICHE = 100
 DEFAULT_VIDEOS_PER_CHANNEL = 50
 
@@ -158,6 +182,11 @@ def _live_transport(api_key: str):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline")
+    parser.add_argument(
+        "--profile", default=None,
+        help="named credential (reads YOUTUBE_API_KEY_<PROFILE>); each profile "
+             "has its own independent quota ledger and is never failed over to",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     research = subparsers.add_parser(
         "research", help="rank niches from live YouTube data"
@@ -185,42 +214,64 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    api_key = os.environ.get("YOUTUBE_API_KEY")
-    if not api_key:
-        raise SystemExit("YOUTUBE_API_KEY is not set (copy .env.example to .env)")
+    api_key, ledger_path = _credential(args.profile)
 
     client_for = lambda: YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
 
     if args.command == "verify":
         client = client_for()
-        ledger = QuotaLedger()
-        for handle in args.handles:
-            check, ledger = check_claim(
-                client, handle, ledger,
-                claimed_views=args.claimed_views, assumed_rpm=args.rpm,
-            )
-            print(format_check(check))
-            print()
-        print(f"({ledger.spent} quota units used)")
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        try:
+            for handle in args.handles:
+                check, ledger = check_claim(
+                    client, handle, ledger,
+                    claimed_views=args.claimed_views, assumed_rpm=args.rpm,
+                )
+                print(format_check(check))
+                print()
+        finally:
+            # Persist on failure too: units charged before a transport error
+            # may already be gone from the real counter.
+            save_ledger(ledger_path, ledger, now)
+        print(f"({ledger.spent:,} of {ledger.daily_limit:,} quota units used today)")
         return 0
 
     now = datetime.now(timezone.utc)
     out_dir = args.out / now.date().isoformat()
     client = YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
 
-    ranked, ledger = run_research(
-        client=client,
-        niches=None,
-        table_path=Path("data/niches.csv"),
-        out_dir=out_dir,
-        now=now,
-        ledger=QuotaLedger(),
+    ledger = load_ledger(ledger_path, now)
+    niche_count = len(load_niches(Path("data/niches.csv")))
+    estimated = estimate_run_cost(
+        niches=niche_count, queries_per_niche=2,
         channels_per_niche=args.channels_per_niche,
-        videos_per_channel=args.videos_per_channel,
-        geography=args.geography,
     )
     print(
+        f"Quota for {quota_date(now)}: {ledger.spent:,} spent, "
+        f"{ledger.remaining:,} remaining. This run needs ~{estimated:,}."
+    )
+    require_headroom(ledger, estimated)
+
+    try:
+            ranked, ledger = run_research(
+            client=client,
+            niches=None,
+            table_path=Path("data/niches.csv"),
+            out_dir=out_dir,
+            now=now,
+            ledger=ledger,
+            channels_per_niche=args.channels_per_niche,
+            videos_per_channel=args.videos_per_channel,
+            geography=args.geography,
+        )
+    finally:
+        # Persist whatever was spent, including on a failed run - those units
+        # are gone from the real counter either way.
+        save_ledger(ledger_path, ledger, now)
+
+    print(
         f"Wrote {len(ranked)} ranked niches to {out_dir} "
-        f"({ledger.spent} of {ledger.daily_limit} quota units used)"
+        f"({ledger.spent:,} of {ledger.daily_limit:,} quota units used today)"
     )
     return 0
