@@ -1,78 +1,92 @@
-import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from contentforge.errors import MissingDataError
 from contentforge.provenance import Fact, Provenance
-from contentforge.research.metrics import NicheMetrics
-from contentforge.research.score import rank, score_niche
+from contentforge.research.niches import Niche
+from contentforge.research.score import MEMBERSHIP_PENALTY, rank, score_niche
+from contentforge.research.trajectory import ChannelTrajectory, Inflection, VideoPoint
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
 PROV = Provenance(source_url="https://x", response_id="r", retrieved_at=NOW)
 
 
-def metrics(niche, competitors, vpd, entrability):
-    return NicheMetrics(
-        niche=niche,
-        competitor_count=Fact(competitors, PROV),
-        median_views_per_day=Fact(vpd, PROV),
-        entrability=Fact(entrability, PROV),
+def a_niche(name="finance", memberships=True):
+    return Niche(
+        name=name, geography="US", rpm_low=10, rpm_high=20, currency="USD",
+        memberships_available=memberships, seed_queries=("a b c",), provenance=PROV,
     )
 
 
-def test_score_matches_hand_computed_value():
-    m = metrics("finance", competitors=4, vpd=100.0, entrability=0.5)
-    result = score_niche(m, Fact(2.0, PROV), "US")
-    expected = 2.0 * math.log1p(100.0) * (0.5 + 0.5) / (1 + math.log1p(4))
-    assert result.score == pytest.approx(expected)
+def traj(channel_id, lift=None):
+    points = tuple(
+        VideoPoint(f"v{n}", NOW - timedelta(days=100 - n), 1.0, 600, "t")
+        for n in range(10)
+    )
+    inflection = (
+        None
+        if lift is None
+        else Inflection(
+            index=5, published_at=points[5].published_at,
+            before_median=1.0, after_median=lift, lift=lift,
+        )
+    )
+    return ChannelTrajectory(channel_id=channel_id, points=points, inflection=inflection)
 
 
-def test_higher_rpm_scores_higher_all_else_equal():
-    m = metrics("finance", 4, 100.0, 0.5)
-    low = score_niche(m, Fact(1.0, PROV), "IN")
-    high = score_niche(m, Fact(4.0, PROV), "US")
-    assert high.score > low.score
+def test_breakout_rate_is_fraction_with_inflection():
+    result = score_niche(
+        a_niche(), [traj("a", 5.0), traj("b"), traj("c"), traj("d")], Fact(15.0, PROV)
+    )
+    assert result.breakout_rate == pytest.approx(0.25)
+    assert result.breakout_count == 1
+    assert result.sampled_channels == 4
 
 
-def test_more_competitors_scores_lower_all_else_equal():
-    few = score_niche(metrics("a", 2, 100.0, 0.5), Fact(2.0, PROV), "US")
-    many = score_niche(metrics("a", 200, 100.0, 0.5), Fact(2.0, PROV), "US")
-    assert few.score > many.score
+def test_median_lift_uses_only_breakout_channels():
+    result = score_niche(
+        a_niche(), [traj("a", 4.0), traj("b", 10.0), traj("c")], Fact(15.0, PROV)
+    )
+    assert result.median_lift == pytest.approx(7.0)
 
 
-def test_higher_entrability_scores_higher_all_else_equal():
-    closed = score_niche(metrics("a", 4, 100.0, 0.0), Fact(2.0, PROV), "US")
-    open_ = score_niche(metrics("a", 4, 100.0, 1.0), Fact(2.0, PROV), "US")
-    assert open_.score > closed.score
+def test_score_is_hand_computable():
+    result = score_niche(a_niche(), [traj("a", 4.0), traj("b")], Fact(15.0, PROV))
+    # rpm 15 * breakout_rate 0.5 * median_lift 4.0 * membership 1.0 = 30
+    assert result.score == pytest.approx(30.0)
 
 
-def test_zero_entrability_still_scores_above_zero():
-    result = score_niche(metrics("a", 4, 100.0, 0.0), Fact(2.0, PROV), "US")
-    assert result.score > 0, "a mature niche should be penalised, not eliminated"
+def test_membership_restriction_penalises_score():
+    trajectories = [traj("a", 4.0), traj("b")]
+    allowed = score_niche(a_niche(memberships=True), trajectories, Fact(15.0, PROV))
+    blocked = score_niche(
+        a_niche("kids", memberships=False), trajectories, Fact(15.0, PROV)
+    )
+    assert blocked.score == pytest.approx(allowed.score * MEMBERSHIP_PENALTY)
 
 
-def test_zero_competitors_does_not_divide_by_zero():
-    result = score_niche(metrics("a", 0, 100.0, 1.0), Fact(2.0, PROV), "US")
-    assert result.score > 0
+def test_niche_with_no_breakouts_scores_zero_not_error():
+    result = score_niche(a_niche(), [traj("a"), traj("b")], Fact(15.0, PROV))
+    assert result.score == 0.0
+    assert result.median_lift == 0.0
+    assert result.breakout_rate == 0.0
 
 
-def test_rank_orders_descending():
-    a = score_niche(metrics("a", 100, 10.0, 0.1), Fact(1.0, PROV), "IN")
-    b = score_niche(metrics("b", 2, 500.0, 0.9), Fact(5.0, PROV), "US")
-    assert [s.niche for s in rank([a, b])] == ["b", "a"]
+def test_empty_trajectory_list_raises():
+    with pytest.raises(MissingDataError):
+        score_niche(a_niche(), [], Fact(15.0, PROV))
 
 
-def test_rank_does_not_mutate_input():
-    a = score_niche(metrics("a", 100, 10.0, 0.1), Fact(1.0, PROV), "IN")
-    b = score_niche(metrics("b", 2, 500.0, 0.9), Fact(5.0, PROV), "US")
+def test_rank_orders_descending_without_mutating():
+    a = score_niche(a_niche("a"), [traj("x", 2.0), traj("y")], Fact(5.0, PROV))
+    b = score_niche(a_niche("b"), [traj("x", 20.0), traj("y", 20.0)], Fact(25.0, PROV))
     original = [a, b]
-    rank(original)
+    assert [s.niche for s in rank(original)] == ["b", "a"]
     assert original == [a, b]
 
 
-def test_score_retains_rpm_and_metrics_for_the_report():
-    m = metrics("finance", 4, 100.0, 0.5)
-    result = score_niche(m, Fact(2.0, PROV), "US")
-    assert result.rpm_usd.value == 2.0
-    assert result.metrics is m
-    assert result.geography == "US"
+def test_score_retains_sample_size_for_the_report():
+    result = score_niche(a_niche(), [traj("a", 4.0), traj("b")], Fact(15.0, PROV))
+    assert result.sampled_channels == 2
+    assert result.rpm_usd.provenance.source_url == "https://x"

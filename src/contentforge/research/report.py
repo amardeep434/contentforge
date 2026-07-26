@@ -1,8 +1,9 @@
 """Research report output.
 
-Two artifacts: report.json for downstream plans, report.md for the human gate.
-Every number in both carries its source URL inline, so the report can be
-audited without re-running anything.
+report.json is the machine-readable artifact and keeps every full source URL.
+report.md is for the human gate and cites response etags instead, linking to
+raw/<etag>.json — revision 1 inlined all fifty channel ids in every citation
+and produced ~3,000-character links that made the report unreadable.
 """
 
 import json
@@ -12,6 +13,8 @@ from pathlib import Path
 from contentforge.errors import MissingDataError
 from contentforge.provenance import Fact
 from contentforge.research.score import NicheScore
+
+MAX_CHANGE_EXAMPLES = 10
 
 
 def _fact_json(fact: Fact) -> dict:
@@ -23,32 +26,72 @@ def _fact_json(fact: Fact) -> dict:
     }
 
 
+def _score_json(score: NicheScore) -> dict:
+    return {
+        "niche": score.niche,
+        "geography": score.geography,
+        "score": score.score,
+        "rpm_usd": _fact_json(score.rpm_usd),
+        "sampled_channels": score.sampled_channels,
+        "breakout_count": score.breakout_count,
+        "breakout_rate": score.breakout_rate,
+        "median_lift": score.median_lift,
+        "membership_factor": score.membership_factor,
+    }
+
+
+def _ranking_table(scores: list[NicheScore]) -> list[str]:
+    lines = [
+        "| # | niche | geo | score | RPM $ | channels | breakouts | rate | median lift |",
+        "|---|-------|-----|-------|-------|----------|-----------|------|-------------|",
+    ]
+    for position, score in enumerate(scores, start=1):
+        lines.append(
+            f"| {position} | {score.niche} | {score.geography} | {score.score:.2f} | "
+            f"{score.rpm_usd.value:.2f} | {score.sampled_channels} | "
+            f"{score.breakout_count} | {score.breakout_rate:.2f} | "
+            f"{score.median_lift:.1f} |"
+        )
+    return lines
+
+
+def _change_section(niche: str, profiles: list) -> list[str]:
+    lines = [f"## What changed at breakout — {niche}", ""]
+    for profile in profiles[:MAX_CHANGE_EXAMPLES]:
+        lines.append(
+            f"- duration {profile.duration_before}s → {profile.duration_after}s; "
+            f"cadence {profile.cadence_days_before}d → {profile.cadence_days_after}d; "
+            f"title {profile.title_words_before:.0f} → {profile.title_words_after:.0f} words"
+        )
+    lines += [
+        "",
+        "_These changes coincided with the inflection. Retention, traffic source "
+        "and thumbnail click-through are not available for other channels, so "
+        "this is association, not cause._",
+        "",
+    ]
+    return lines
+
+
 def write_report(
-    scores: list[NicheScore], out_dir: Path, generated_at: datetime
+    scores: list[NicheScore],
+    change_profiles: dict,
+    raw_responses: dict,
+    out_dir: Path,
+    generated_at: datetime,
 ) -> tuple[Path, Path]:
     if not scores:
         raise MissingDataError("refusing to write an empty research report")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = out_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    for etag, body in raw_responses.items():
+        (raw_dir / f"{etag}.json").write_text(json.dumps(body, indent=2))
 
     payload = {
         "generated_at": generated_at.isoformat(),
-        "niches": [
-            {
-                "niche": score.niche,
-                "geography": score.geography,
-                "score": score.score,
-                "rpm_usd": _fact_json(score.rpm_usd),
-                "metrics": {
-                    "competitor_count": _fact_json(score.metrics.competitor_count),
-                    "median_views_per_day": _fact_json(
-                        score.metrics.median_views_per_day
-                    ),
-                    "entrability": _fact_json(score.metrics.entrability),
-                },
-            }
-            for score in scores
-        ],
+        "niches": [_score_json(score) for score in scores],
     }
     json_path = out_dir / "report.json"
     json_path.write_text(json.dumps(payload, indent=2))
@@ -56,26 +99,17 @@ def write_report(
     lines = [
         f"# Niche research — {generated_at.date().isoformat()}",
         "",
-        "Every figure links to the response it came from. If a number has no "
-        "link, it did not come from this pipeline.",
+        "Figures cite the API response etag; raw bodies are in `raw/`.",
         "",
     ]
-    for position, score in enumerate(scores, start=1):
-        metrics = score.metrics
-        lines += [
-            f"## {position}. {score.niche} ({score.geography}) — score {score.score:.2f}",
-            "",
-            f"- RPM (USD): {score.rpm_usd.value:.2f} "
-            f"— [source]({score.rpm_usd.provenance.source_url})",
-            f"- Competitors ≥10k subs: {metrics.competitor_count.value} "
-            f"— [source]({metrics.competitor_count.provenance.source_url})",
-            f"- Median views/day: {metrics.median_views_per_day.value:.1f} "
-            f"— [source]({metrics.median_views_per_day.provenance.source_url})",
-            f"- Entrability: {metrics.entrability.value:.2f} "
-            f"— [source]({metrics.entrability.provenance.source_url})",
-            "",
-        ]
+    lines += _ranking_table(scores)
+    lines += ["", f"RPM source etag: `{scores[0].rpm_usd.provenance.response_id}`", ""]
+
+    for score in scores:
+        profiles = change_profiles.get(score.niche) or []
+        if profiles:
+            lines += _change_section(score.niche, profiles)
+
     md_path = out_dir / "report.md"
     md_path.write_text("\n".join(lines))
-
     return json_path, md_path

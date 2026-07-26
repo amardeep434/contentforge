@@ -13,7 +13,7 @@ instagram_session*
 
 # ---- pipeline data (large, regenerable, may contain scraped PII) ----
 data/*
-!data/rpm_table.csv
+!data/niches.csv
 renders/
 output/
 assets/

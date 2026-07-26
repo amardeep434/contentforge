@@ -1,9 +1,10 @@
 """Command line entry point.
 
     pipeline research [--geography US] [--out data/research]
+                      [--channels-per-niche 100] [--videos-per-channel 50]
 
-Reads YOUTUBE_API_KEY from the environment and fails loudly if it is absent.
-Credentials are never read from anywhere but the environment, and never logged.
+Reads YOUTUBE_API_KEY from the environment and fails loudly if absent.
+Credentials come only from the environment and are never logged.
 """
 
 import argparse
@@ -11,43 +12,108 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from contentforge.config import DEFAULT_GEOGRAPHY, NICHE_QUERIES
+from contentforge.errors import MissingDataError
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.youtube_api import YouTubeClient
-from contentforge.research.discover import discover_niche
-from contentforge.research.metrics import compute_metrics
+from contentforge.research.changes import describe_change
+from contentforge.research.niches import load_niches, rpm_midpoint_usd
 from contentforge.research.report import write_report
-from contentforge.research.rpm_table import load_rpm_table, rpm_midpoint_usd
 from contentforge.research.score import NicheScore, rank, score_niche
+from contentforge.research.trajectory import MIN_SIDE_VIDEOS, build_trajectory
+
+MIN_VIDEOS_FOR_TRAJECTORY = MIN_SIDE_VIDEOS * 2
+DEFAULT_CHANNELS_PER_NICHE = 100
+DEFAULT_VIDEOS_PER_CHANNEL = 50
+
+
+def _collect_channel_ids(client, niche, ledger, limit):
+    """Search every seed query, dedupe, and stop at the limit."""
+    channel_ids: list[str] = []
+    current = ledger
+    for query in niche.seed_queries:
+        if len(channel_ids) >= limit:
+            break
+        refs, current = client.search_channels(query, current)
+        for ref in refs:
+            if ref.channel_id not in channel_ids:
+                channel_ids.append(ref.channel_id)
+    return channel_ids[:limit], current
+
+
+def _trajectories_for(client, playlists, ledger, now, videos_per_channel):
+    """Build a trajectory per channel, skipping those too young to read.
+
+    A channel with fewer than MIN_VIDEOS_FOR_TRAJECTORY uploads is skipped
+    rather than failed — having no trajectory is the honest answer for it, not
+    an error in the run.
+    """
+    current = ledger
+    trajectories = []
+    profiles = []
+    for channel_id, playlist_id in playlists.items():
+        video_ids, current = client.get_playlist_video_ids(
+            playlist_id, current, max_videos=videos_per_channel
+        )
+        if len(video_ids) < MIN_VIDEOS_FOR_TRAJECTORY:
+            continue
+        videos, current = client.get_videos(video_ids, current)
+        if len(videos) < MIN_VIDEOS_FOR_TRAJECTORY:
+            continue
+        trajectory = build_trajectory(channel_id, videos, now)
+        trajectories.append(trajectory)
+        profile = describe_change(trajectory)
+        if profile is not None:
+            profiles.append(profile)
+    return trajectories, profiles, current
 
 
 def run_research(
     client: YouTubeClient,
-    niches: dict[str, list[str]],
-    geography: str,
+    niches,
     table_path: Path,
     out_dir: Path,
     now: datetime,
     ledger: QuotaLedger,
+    channels_per_niche: int = DEFAULT_CHANNELS_PER_NICHE,
+    videos_per_channel: int = DEFAULT_VIDEOS_PER_CHANNEL,
+    geography: str | None = None,
 ) -> tuple[list[NicheScore], QuotaLedger]:
-    """Score every niche and write the report.
+    """Score every niche in the table and write the report.
 
     Returns the ranked scores and the final ledger, so callers can assert on
     quota actually consumed rather than trusting it.
     """
-    table = load_rpm_table(table_path)
+    table = niches if niches is not None else load_niches(table_path)
     current = ledger
     scores: list[NicheScore] = []
+    change_profiles: dict[str, list] = {}
+    raw_responses: dict[str, dict] = {}
 
-    for niche, queries in niches.items():
-        candidate, current = discover_niche(client, niche, queries, current)
-        channel_stats, current = client.get_channels(list(candidate.channel_ids), current)
-        metrics = compute_metrics(candidate, channel_stats, now)
-        rpm = rpm_midpoint_usd(table, niche, geography)
-        scores.append(score_niche(metrics, rpm, geography))
+    for (name, geo), niche in table.items():
+        if geography is not None and geo != geography:
+            continue
+
+        channel_ids, current = _collect_channel_ids(
+            client, niche, current, channels_per_niche
+        )
+        if not channel_ids:
+            continue
+
+        playlists, current = client.get_uploads_playlists(channel_ids, current)
+        trajectories, profiles, current = _trajectories_for(
+            client, playlists, current, now, videos_per_channel
+        )
+        if not trajectories:
+            continue
+
+        scores.append(score_niche(niche, trajectories, rpm_midpoint_usd(niche)))
+        change_profiles[name] = profiles
+
+    if not scores:
+        raise MissingDataError("no niche produced a scorable sample")
 
     ranked = rank(scores)
-    write_report(ranked, out_dir, now)
+    write_report(ranked, change_profiles, raw_responses, out_dir, now)
     return ranked, current
 
 
@@ -69,8 +135,14 @@ def main(argv: list[str] | None = None) -> int:
     research = subparsers.add_parser(
         "research", help="rank niches from live YouTube data"
     )
-    research.add_argument("--geography", default=DEFAULT_GEOGRAPHY)
+    research.add_argument("--geography", default=None)
     research.add_argument("--out", type=Path, default=Path("data/research"))
+    research.add_argument(
+        "--channels-per-niche", type=int, default=DEFAULT_CHANNELS_PER_NICHE
+    )
+    research.add_argument(
+        "--videos-per-channel", type=int, default=DEFAULT_VIDEOS_PER_CHANNEL
+    )
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
@@ -83,12 +155,14 @@ def main(argv: list[str] | None = None) -> int:
 
     ranked, ledger = run_research(
         client=client,
-        niches=NICHE_QUERIES,
-        geography=args.geography,
-        table_path=Path("data/rpm_table.csv"),
+        niches=None,
+        table_path=Path("data/niches.csv"),
         out_dir=out_dir,
         now=now,
         ledger=QuotaLedger(),
+        channels_per_niche=args.channels_per_niche,
+        videos_per_channel=args.videos_per_channel,
+        geography=args.geography,
     )
     print(
         f"Wrote {len(ranked)} ranked niches to {out_dir} "

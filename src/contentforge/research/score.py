@@ -1,26 +1,28 @@
-"""Niche ranking.
+"""Trajectory-based niche ranking.
 
-    score = rpm_usd * log1p(views_per_day) * (0.5 + entrability) / (1 + log1p(competitors))
+    score = rpm_usd * breakout_rate * median_lift * membership_factor
 
-RPM sets the revenue ceiling; view velocity rewards demand; entrability rewards
-niches newcomers still break into; competitor count damps saturation. Both
-volume terms are logarithmic because the difference between 10 and 100
-competitors matters far more than between 1,000 and 1,090.
+RPM sets the revenue ceiling. Breakout rate answers "do newcomers here actually
+break through" — the question revision 1's competitor count was trying and
+failing to ask, because that metric was bounded by our own sample size. Median
+lift answers "when they do, how big is the jump". Membership factor encodes
+whether first revenue is reachable at 500 subscribers or only at 1,000.
 
-The `0.5 +` floor on entrability penalises a mature niche rather than
-eliminating it — a high-RPM niche with few new entrants can still be worth
-entering.
-
-These weights are a starting hypothesis, not an empirical result. If the first
-real report ranks something obviously wrong, suspect this formula before
-suspecting the data.
+These weights are a hypothesis. If a run ranks something obviously wrong,
+suspect this formula before the data.
 """
 
-import math
 from dataclasses import dataclass
+from statistics import median
 
+from contentforge.errors import MissingDataError
 from contentforge.provenance import Fact
-from contentforge.research.metrics import NicheMetrics
+from contentforge.research.niches import Niche
+
+# Made for Kids removes Super Thanks and Memberships, so the Tier 1 revenue path
+# (500 subscribers) does not exist there. Halving is a judgement call, not a
+# measurement — if kids ranks oddly, this constant is the first suspect.
+MEMBERSHIP_PENALTY = 0.5
 
 
 @dataclass(frozen=True)
@@ -29,19 +31,38 @@ class NicheScore:
     geography: str
     score: float
     rpm_usd: Fact
-    metrics: NicheMetrics
+    sampled_channels: int
+    breakout_count: int
+    breakout_rate: float
+    median_lift: float
+    membership_factor: float
 
 
-def score_niche(metrics: NicheMetrics, rpm_usd: Fact, geography: str) -> NicheScore:
-    demand = math.log1p(metrics.median_views_per_day.value)
-    openness = 0.5 + metrics.entrability.value
-    saturation = 1 + math.log1p(metrics.competitor_count.value)
+def score_niche(niche: Niche, trajectories: list, rpm_usd: Fact) -> NicheScore:
+    if not trajectories:
+        raise MissingDataError(
+            f"no trajectories for niche {niche.name!r}; refusing to score an empty sample"
+        )
+
+    lifts = [
+        trajectory.inflection.lift
+        for trajectory in trajectories
+        if trajectory.inflection is not None
+    ]
+    breakout_rate = len(lifts) / len(trajectories)
+    median_lift = median(lifts) if lifts else 0.0
+    membership_factor = 1.0 if niche.memberships_available else MEMBERSHIP_PENALTY
+
     return NicheScore(
-        niche=metrics.niche,
-        geography=geography,
-        score=rpm_usd.value * demand * openness / saturation,
+        niche=niche.name,
+        geography=niche.geography,
+        score=rpm_usd.value * breakout_rate * median_lift * membership_factor,
         rpm_usd=rpm_usd,
-        metrics=metrics,
+        sampled_channels=len(trajectories),
+        breakout_count=len(lifts),
+        breakout_rate=breakout_rate,
+        median_lift=median_lift,
+        membership_factor=membership_factor,
     )
 
 
