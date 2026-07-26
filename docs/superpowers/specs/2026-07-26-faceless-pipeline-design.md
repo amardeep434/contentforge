@@ -67,81 +67,131 @@ This exists because the prior scaffolding's `research_niches.py` returned a cann
 
 ```
 providers/                       thin API clients, every record provenanced
-  youtube_api.py                 Data API v3 — search, videos, channels
-  instagram_research.py          instagrapi. Throwaway account. ToS-violating.
-  instagram_publish.py           Graph API. Real Business account. Never shares creds with the above.
-  threads_publish.py             Official Threads API
+  youtube_api.py                 Data API v3 — search, channels, playlistItems, videos
+  instagram_research.py          instagrapi. Throwaway account. ToS-violating. (Plan 3)
+  instagram_publish.py           Graph API. Real Business account. Never shares creds. (Plan 4)
+  threads_publish.py             Official Threads API (Plan 4)
   threads_research.py            NOT IMPLEMENTED until Apify. Absent = "not collected".
-  llm.py                         OpenAI-compatible; base_url from config
+  llm.py                         OpenAI-compatible; base_url from config (Plan 2)
 
 research/
-  discover.py                    candidate niches from seeds + YouTube search
-  metrics.py                     competition density, view velocity, channel-age spread, cadence
-  rpm_table.py                   RPM by niche × geography — checked-in data file, sourced per row
-  score.py                       ranked report
+  discover.py                    seed queries → candidate channels
+  trajectory.py                  per-video view curves → inflection detection
+  changes.py                     what differed pre- vs post-inflection
+  niches.py                      niche table: RPM, geography, monetization restrictions
+  score.py                       ranking
+  report.py                      json + markdown output
 
-sourcing/                        primary docs: full text + URL + retrieval timestamp
-script/
-  generate.py                    LLM from sources, structure chosen per video, inline citations
-  validate.py                    THE POLICY GATE — see §4
-voice/                           edge-tts → audio + word-level timings
-visuals/                         Openverse / Wikimedia, license recorded per asset
-render/                          ffmpeg; 16:9 long-form and 9:16 Short from shared material
-publish/                         YouTube OAuth · IG Reels · Threads
-review/                          approve/reject gate
+sourcing/                        primary docs (Plan 2)
+script/                          generation + provenance validator (Plan 2)
+voice/ visuals/ render/          production (Plan 2/3)
+publish/                         platform upload (Plan 2/4)
+review/                          approve/reject gate (Plan 3)
 provenance.py                    record type + validator, used by everything
 ```
 
-### Credential separation (safety-critical)
+## 7. Research method
 
-`instagrapi` logs in as a real user and violates Meta's ToS; bans occur. If the scraping account were also the publishing account, one ban would cost both the research input and the distribution channel. The two Instagram modules therefore never share credentials, and this separation is not to be collapsed for convenience.
+The first version of this engine measured **states** — how big are the channels in a niche, how many are there. That failed: search returns the incumbents for every query, so competitor counts were bounded by our own sample size and every niche looked identically saturated. The ranking collapsed to an RPM lookup.
 
-### `rpm_table.py`
+This version measures **transitions**. A channel's current size says little; the shape of its climb says a lot.
 
-RPM figures drive every ranking decision, and an LLM will invent them readily. So this is a checked-in data file with a source URL and date per row, updated by hand. Wrong-but-cited beats confident-and-fabricated.
+### The constraint
 
-## 7. Data flow
+The YouTube API exposes **no historical channel data**. `channels.list` returns current subscriber and view counts only. There is no way to see when a channel crossed 1,000 subscribers.
 
-### Weekly research loop (cron)
+### The workaround, which is better than the thing it replaces
 
-```
-pipeline research
-  → YouTube Data API sweep + instagrapi research account
-  → score = f(RPM × geography, competition density, view velocity, channel-age spread)
-  → data/research/<date>/report.json + report.md
-```
-
-### Per-video loop
+Per-video data reconstructs the trajectory:
 
 ```
-pipeline source  <topic>    primary docs
-pipeline script  <topic>    generate + validate → scripts/pending/   ← operator gate
-pipeline voice   <slug>     audio + word timings
-pipeline visuals <slug>     assets + licenses
-pipeline render  <slug>     16:9 long-form, 9:16 Short (≤90s, IG Reels compatible)
-pipeline publish <slug>     YouTube · IG Reels · Threads
+channels.list  part=contentDetails   → uploads playlist id
+playlistItems.list                   → up to 50 video ids per call
+videos.list                          → publishedAt, viewCount, duration, title
 ```
 
-Each artifact directory carries `state.json` with stage and status, so any stage resumes without redoing its predecessor.
+Each video is a dated observation. A channel whose recent videos vastly outperform its older ones has broken out, and the video where that begins is the inflection.
 
-## 8. Quota budget
+### Normalisation (non-negotiable)
 
-YouTube Data API free tier is 10,000 units/day. Costs are wildly uneven, and this dictates query design:
+Views accumulate with age. A two-year-old video has had two years to gather views; last week's has had six days. **All comparisons use views-per-day-since-publish**, never raw view counts. Getting this wrong inverts the entire analysis, making every old video look successful.
 
-| Call | Units |
+### Inflection detection
+
+For each channel, compute views-per-day for every video, ordered by publish date. The inflection is the point maximising the ratio of median velocity after it to median velocity before it, subject to a minimum of five videos on each side. A channel with no such point above a threshold ratio has not broken out and is recorded as such — not discarded, because non-breakouts are the control group.
+
+### Change attribution — within channel, not across
+
+Comparing breakout channels to each other invites survivorship bias: "posted consistently then went viral" describes the winners and equally describes the thousands who did the same and sank.
+
+So attribution is **within-channel**: for each channel with an inflection, diff its pre-inflection videos against its post-inflection videos on duration, upload cadence, title length and structure, and topic terms. Same creator, same baseline, so channel-level confounds cancel.
+
+### What this cannot do
+
+Stated here so the report never implies otherwise:
+
+- **No causal claims.** Retention curves, traffic sources and thumbnail click-through are not exposed for other people's channels. We observe what changed around an inflection and that it coincided. We never observe why it worked.
+- **Survivorship bias is reduced, not eliminated.** Search still surfaces channels that already won. Within-channel comparison controls for channel-level confounds, not for selection into the sample.
+- **Sample is search-shaped.** Channels that never rank for a seed query are invisible regardless of merit.
+
+## 8. Niche table
+
+`data/niches.csv`, one hand-sourced row per niche/geography, extended from the RPM-only version:
+
+| column | meaning |
 |---|---|
-| `search.list` | 100 |
-| `videos.list` | 1 |
-| `channels.list` | 1 |
-| `videos.insert` | 1,600 |
+| niche, geography | key |
+| rpm_low, rpm_high, currency | revenue per 1,000 views |
+| memberships_available | false where YouTube disables Super Thanks / Memberships |
+| seed_queries | pipe-separated, long-tail rather than head terms |
+| source_url, retrieved_at | provenance |
 
-The scorer spends a small number of searches to find candidate channels, then fans out over cheap list calls for metrics — roughly 30 searches plus ~2,000 list calls per run, comfortably inside one day. A naive design burns the entire quota in 100 calls.
+Roughly 12–15 categories: finance, tech, education, health, gaming, true crime, history, DIY, food, travel, self-improvement, business, science, kids, entertainment.
 
-`videos.insert` at 1,600 units caps uploads at **6/day**, which matters only for bulk backfill.
+`memberships_available` exists because of Made for Kids. COPPA bars behavioural tracking on under-13 content, so only contextual ads serve (RPM $1–3 against $20–40 for finance), and **Super Thanks and Channel Memberships are disabled at platform level**. That removes the Tier 1 revenue path entirely, and YouTube's automated classifier applies the restriction retroactively to back catalogues. The scorer penalises restricted niches accordingly rather than the operator arguing about it — if kids still ranks well despite the penalty, it earns the slot on evidence.
 
-Instagram/Threads publishing caps are 250 posts / 1,000 replies / 100 deletions per profile per 24h. Not a practical constraint.
+**Seed queries must be long-tail.** Head terms ("index funds", "ai tools") return the same incumbents for every niche, which is what defeated the first version. Narrow queries are where competitive structure actually varies.
 
-## 9. Failure handling
+## 9. Sampling scale and quota
+
+Search is expensive; everything else is nearly free. This inverts the budget from the previous design.
+
+| call | units | note |
+|---|---|---|
+| `search.list` | 100 | the only costly call |
+| `channels.list` | 1 | ≤50 ids per call — 51 returns HTTP 400 `invalidFilters` |
+| `playlistItems.list` | 1 | ≤50 videos per call |
+| `videos.list` | 1 | ≤50 ids per call |
+
+Per channel with a 50-video history: ~3 units. So a run sampling **500 channels** costs roughly:
+
+```
+20 searches            2,000
+500 channels × 3       1,500
+                       -----
+                       3,500 of 10,000 units
+```
+
+Wide sampling is affordable; the previous design's narrowness was never a budget constraint, only a design error. Runs are capped by the ledger and stop cleanly rather than degrading to a smaller sample, because a silently truncated sample yields a confidently wrong ranking.
+
+## 10. Scoring
+
+```
+score = rpm_usd
+      × breakout_rate            fraction of sampled channels with a detected inflection
+      × median_breakout_lift     median post/pre velocity ratio among those
+      × membership_factor        1.0 normally, penalised where Tier 1 is unavailable
+```
+
+Rationale: RPM sets the ceiling. Breakout rate answers "do newcomers in this niche actually break through" — the question the old competitor-count metric was trying and failing to ask. Breakout lift answers "when they do, how big is the jump". Membership factor encodes whether first revenue is reachable at 500 subs or only at 1,000.
+
+These weights remain a hypothesis. If a run ranks something obviously wrong, suspect the formula before the data.
+
+## 11. Report rendering
+
+The first version embedded all 50 channel ids in every provenance URL, producing ~3,000-character source links and an unreadable report. Fixed: markdown cites the response **etag** and links to the raw response stored under `data/research/<date>/raw/<etag>.json`. Full auditability, readable output.
+
+## 12. Failure handling
 
 Governing rule: **fail loudly, write nothing.** No stage emits partial or synthesised output when an input is missing.
 
@@ -150,7 +200,7 @@ Governing rule: **fail loudly, write nothing.** No stage emits partial or synthe
 - Renders write to a temp path and move on success, so a crash cannot leave a half-video that looks finished.
 - `instagrapi` login challenge or ban disables the research stage and alerts. It never falls back to cached or invented Instagram data, and never touches publishing credentials.
 
-## 10. Testing
+## 13. Testing
 
 Concentrated where the money and the risk are.
 
@@ -161,11 +211,11 @@ Concentrated where the money and the risk are.
 
 Deliberately not tested heavily: LLM output quality. It is non-deterministic, and the validator already enforces the properties that matter.
 
-## 11. Out of scope (YAGNI)
+## 14. Out of scope (YAGNI)
 
 Cut from the prior scaffolding, all addable later, none needed to reach first revenue: n8n and its webhook workflows; the multi-provider TTS abstraction (edge-tts is free and adequate); income tracking; a web UI.
 
-## 12. Lead-time actions
+## 15. Lead-time actions
 
 Meta App Review takes 2–4 weeks, with a separate submission per permission and a screencast of the full flow. It costs nothing but calendar time, so it starts immediately and in parallel with implementation.
 
@@ -176,11 +226,13 @@ Meta App Review takes 2–4 weeks, with a separate submission per permission and
 - [ ] Create Google Cloud project, enable YouTube Data API v3, create OAuth credentials
 - [ ] Create the throwaway Instagram account for research scraping
 
-## 13. Build order
+## 16. Build order
 
 This design is too large for one implementation plan. It decomposes into four, each independently useful and each gated on the previous one working against real data.
 
-**Plan 1 — research engine.** `provenance.py`, `providers/youtube_api.py`, `research/*`. Ends when `pipeline research` produces a ranked report whose every number traces to a real API response. Gate: the report has to be believable enough to pick a niche from. Nothing downstream is written until it is.
+**Plan 1 — research engine.** `provenance.py`, `providers/youtube_api.py`, `research/*`. Ends when `pipeline research` produces a ranked report whose every number traces to a real API response. Gate: **if the top-ranked niche is one the operator could have guessed without building this, the engine has told them nothing and needs rework.** Nothing downstream is written until it clears.
+
+Plan 1 revision 1 (state-based metrics) was built, run against live data, and failed that gate — competitor count and entrability were bounded by our own sample size, so the ranking reduced to an RPM lookup. Revision 2 replaces state measurement with trajectory analysis (§7).
 
 **Plan 2 — vertical slice to one published Short.** `sourcing/`, `script/` (including the validator), `voice/`, `visuals/`, `render/`, `publish/youtube.py`. One niche, one topic, one video, published. Deliberately narrow: proves the chain end to end and flushes out OAuth, ffmpeg and TTS timing, which are the fiddly integrations.
 
@@ -190,9 +242,11 @@ This design is too large for one implementation plan. It decomposes into four, e
 
 `instagram_research.py` slots into Plan 1 or 3 depending on whether the throwaway account is ready. `threads_research.py` stays unbuilt until there is revenue to justify Apify.
 
-## 14. Open questions
+## 17. Open questions
 
-- Audience geography is deliberately unresolved; the first research run decides it.
+- Audience geography is deliberately unresolved; the research run decides it.
+- The breakout-detection threshold ratio and the minimum videos either side of an inflection need empirical values. Start strict.
+- Whether within-channel change attribution actually discriminates is itself the open question revision 2 exists to answer. If breakout rate proves as flat across niches as competitor count was, the premise that public metrics can identify a niche is wrong, and niche selection should fall back to RPM plus operator interest.
 - The verbatim-overlap threshold in `validate.py` needs an empirical value. Start strict, loosen only with evidence.
 - Whether TTS narration alone triggers YouTube's synthetic-content disclosure requirement is not settled from public documentation. Default to disclosing when imagery depicts real people or events.
 
@@ -202,6 +256,9 @@ This design is too large for one implementation plan. It decomposes into four, e
 - [TechCrunch — YouTube clarifies AI slop policy](https://techcrunch.com/2026/07/20/youtube-clarifies-policies-around-ai-slop-and-upsetting-videos/)
 - [YouTube Partner Program requirements 2026](https://vidiq.com/blog/post/youtube-partner-program-guide/)
 - [India RPM by niche](https://www.identitykit.in/blog/youtube-rpm-india-niche-2026)
+- [COPPA cuts kids-channel revenue by up to 80%](https://www.techtimes.com/articles/320340/20260713/ai-kids-cartoon-gold-rush-has-hidden-tax-coppa-cuts-revenue-80.htm)
+- [Made for Kids monetization rules](https://vidiq.com/blog/post/make-money-kids-youtube-channel/)
+- [YouTube Made for Kids ad restrictions 2026](https://www.auditsocials.com/blog/youtube-made-for-kids-ad-restrictions-update-2026-coppa-expansion-limited-ads-mode-family-friendly-compliance)
 - [Threads API pricing](https://www.blotato.com/blog/threads-api-pricing)
 - [Threads publishing API](https://postproxy.dev/blog/how-to-post-to-threads-via-api/)
 - [Instagram Reels API publishing guide](https://postproxy.dev/blog/instagram-reels-api-publishing-guide/)

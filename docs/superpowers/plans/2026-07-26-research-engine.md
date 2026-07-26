@@ -1,3 +1,8 @@
+> **SUPERSEDED.** This plan was implemented and run against live data. It failed its gate:
+> the ranking collapsed to an RPM lookup because `competitor_count` and `entrability` were
+> bounded by our own sample size. See `2026-07-26-research-engine-v2.md`. Kept for the
+> record — its Tasks 1-3 (provenance, quota, YouTube client) survive unchanged in v2.
+
 # Research Engine Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
