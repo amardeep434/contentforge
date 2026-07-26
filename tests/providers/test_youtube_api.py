@@ -164,3 +164,126 @@ def test_get_channels_charges_one_unit_for_exactly_fifty():
     client = YouTubeClient(api_key="k", transport=transport)
     _stats, ledger = client.get_channels([f"UC_{n}" for n in range(50)], QuotaLedger())
     assert ledger.spent == 1
+
+
+# --- revision 2: video history fetching -------------------------------------
+
+from contentforge.providers.youtube_api import parse_iso8601_duration
+
+
+def test_parse_iso8601_duration_handles_all_components():
+    assert parse_iso8601_duration("PT5M30S") == 330
+    assert parse_iso8601_duration("PT1M21S") == 81
+    assert parse_iso8601_duration("PT1H2M3S") == 3723
+    assert parse_iso8601_duration("PT45S") == 45
+    assert parse_iso8601_duration("PT2H") == 7200
+
+
+def test_parse_iso8601_duration_rejects_garbage():
+    with pytest.raises(MissingDataError):
+        parse_iso8601_duration("banana")
+
+
+def test_get_uploads_playlists_maps_channel_to_playlist():
+    def transport(endpoint, params):
+        return {
+            "etag": "cd-1",
+            "items": [
+                {"id": "UC_a", "contentDetails": {"relatedPlaylists": {"uploads": "UU_a"}}},
+                {"id": "UC_b", "contentDetails": {"relatedPlaylists": {"uploads": "UU_b"}}},
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    mapping, ledger = client.get_uploads_playlists(["UC_a", "UC_b"], QuotaLedger())
+    assert mapping == {"UC_a": "UU_a", "UC_b": "UU_b"}
+    assert ledger.spent == 1
+
+
+def test_get_uploads_playlists_batches_in_fifties():
+    calls = []
+
+    def transport(endpoint, params):
+        ids = params["id"].split(",")
+        calls.append(len(ids))
+        assert len(ids) <= 50
+        return {
+            "etag": "cd",
+            "items": [
+                {"id": cid, "contentDetails": {"relatedPlaylists": {"uploads": "UU" + cid}}}
+                for cid in ids
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    mapping, ledger = client.get_uploads_playlists(
+        [f"UC_{n}" for n in range(120)], QuotaLedger()
+    )
+    assert calls == [50, 50, 20]
+    assert len(mapping) == 120
+    assert ledger.spent == 3
+
+
+def test_get_playlist_video_ids_returns_ids():
+    def transport(endpoint, params):
+        return {
+            "etag": "pl-1",
+            "items": [{"contentDetails": {"videoId": f"v{n}"}} for n in range(47)],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    ids, ledger = client.get_playlist_video_ids("UU_a", QuotaLedger())
+    assert len(ids) == 47
+    assert ids[0] == "v0"
+    assert ledger.spent == 1
+
+
+def test_get_videos_returns_records_with_velocity_inputs():
+    def transport(endpoint, params):
+        return {
+            "etag": "vid-1",
+            "items": [
+                {
+                    "id": "v1",
+                    "snippet": {
+                        "channelId": "UC_a",
+                        "title": "How index funds work",
+                        "publishedAt": "2025-01-01T00:00:00Z",
+                    },
+                    "statistics": {"viewCount": "5000"},
+                    "contentDetails": {"duration": "PT8M12S"},
+                }
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    videos, ledger = client.get_videos(["v1"], QuotaLedger())
+    assert len(videos) == 1
+    assert videos[0].view_count.value == 5000
+    assert videos[0].duration_seconds.value == 492
+    assert videos[0].title == "How index funds work"
+    assert videos[0].published_at.value.tzinfo is not None
+    assert ledger.spent == 1
+
+
+def test_get_videos_tolerates_missing_view_count_as_zero_not_error():
+    def transport(endpoint, params):
+        return {
+            "etag": "vid-2",
+            "items": [
+                {
+                    "id": "v1",
+                    "snippet": {
+                        "channelId": "UC_a",
+                        "title": "t",
+                        "publishedAt": "2026-07-26T00:00:00Z",
+                    },
+                    "statistics": {},
+                    "contentDetails": {"duration": "PT30S"},
+                }
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    videos, _ledger = client.get_videos(["v1"], QuotaLedger())
+    assert videos[0].view_count.value == 0

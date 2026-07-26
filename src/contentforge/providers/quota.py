@@ -13,6 +13,7 @@ from contentforge.errors import QuotaExceededError
 UNIT_COSTS: dict[str, int] = {
     "search.list": 100,
     "videos.list": 1,
+    "playlistItems.list": 1,
     "channels.list": 1,
     "videos.insert": 1600,
 }

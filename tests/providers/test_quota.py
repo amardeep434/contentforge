@@ -47,3 +47,8 @@ def test_charge_exactly_to_the_limit_is_allowed():
     ledger = QuotaLedger(daily_limit=100).charge("search.list")
     assert ledger.spent == 100
     assert ledger.remaining == 0
+
+
+def test_playlist_items_cost_is_one_unit():
+    assert UNIT_COSTS["playlistItems.list"] == 1
+    assert QuotaLedger().charge("playlistItems.list").spent == 1
