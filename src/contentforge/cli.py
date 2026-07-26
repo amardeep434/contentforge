@@ -9,10 +9,15 @@ Credentials come only from the environment and are never logged.
 
 import argparse
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from contentforge.errors import MissingDataError
+from contentforge.errors import (
+    ContentforgeError,
+    MissingDataError,
+    ResourceNotFoundError,
+)
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.youtube_api import YouTubeClient
 from contentforge.research.changes import describe_change
@@ -51,9 +56,14 @@ def _trajectories_for(client, playlists, ledger, now, videos_per_channel):
     trajectories = []
     profiles = []
     for channel_id, playlist_id in playlists.items():
-        video_ids, current = client.get_playlist_video_ids(
-            playlist_id, current, max_videos=videos_per_channel
-        )
+        try:
+            video_ids, current = client.get_playlist_video_ids(
+                playlist_id, current, max_videos=videos_per_channel
+            )
+        except ResourceNotFoundError:
+            # Terminated or fully private channels keep an uploads playlist id
+            # that no longer resolves. Skip the channel; the run continues.
+            continue
         if len(video_ids) < MIN_VIDEOS_FOR_TRAJECTORY:
             continue
         videos, current = client.get_videos(video_ids, current)
@@ -117,14 +127,30 @@ def run_research(
     return ranked, current
 
 
+def _redact(text: str) -> str:
+    """Strip API keys from error text.
+
+    googleapiclient embeds the full request URL - including key=... - in its
+    exception messages, so an unhandled traceback would print the credential.
+    """
+    return re.sub(r"key=[A-Za-z0-9_\-]+", "key=REDACTED", text)
+
+
 def _live_transport(api_key: str):
     from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
 
     service = build("youtube", "v3", developerKey=api_key, cache_discovery=False)
 
     def _transport(endpoint: str, params: dict) -> dict:
         resource, method = endpoint.split(".")
-        return getattr(getattr(service, resource)(), method)(**params).execute()
+        try:
+            return getattr(getattr(service, resource)(), method)(**params).execute()
+        except HttpError as error:
+            message = _redact(str(error))
+            if error.resp.status == 404:
+                raise ResourceNotFoundError(message) from None
+            raise ContentforgeError(message) from None
 
     return _transport
 

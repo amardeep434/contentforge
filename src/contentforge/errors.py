@@ -20,3 +20,11 @@ class QuotaExceededError(ContentforgeError):
 
 class MissingDataError(ContentforgeError):
     """Required input is absent. Never substitute a default."""
+
+
+class ResourceNotFoundError(ContentforgeError):
+    """The API reported that a requested resource does not exist.
+
+    Distinct from MissingDataError: the request was well formed and the
+    resource is genuinely absent, so the caller may reasonably skip it.
+    """
