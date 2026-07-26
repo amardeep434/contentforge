@@ -19,6 +19,10 @@ from contentforge.providers.quota import QuotaLedger
 
 API_ROOT = "https://www.googleapis.com/youtube/v3"
 
+# channels.list accepts at most 50 ids per call; 51 returns HTTP 400
+# "invalidFilters". Verified against the live API.
+MAX_IDS_PER_CHANNELS_CALL = 50
+
 Transport = Callable[[str, dict], dict]
 
 
@@ -109,12 +113,18 @@ class YouTubeClient:
         if not channel_ids:
             raise MissingDataError("get_channels called with no ids")
 
-        params = {"id": ",".join(channel_ids), "part": "snippet,statistics"}
-        charged = ledger.charge("channels.list")
-        body = self._transport("channels.list", params)
-        prov = _provenance("channels.list", params, body)
+        current = ledger
+        items: list[dict] = []
+        prov = None
+        for start in range(0, len(channel_ids), MAX_IDS_PER_CHANNELS_CALL):
+            batch = channel_ids[start : start + MAX_IDS_PER_CHANNELS_CALL]
+            params = {"id": ",".join(batch), "part": "snippet,statistics"}
+            current = current.charge("channels.list")
+            body = self._transport("channels.list", params)
+            if prov is None:
+                prov = _provenance("channels.list", params, body)
+            items.extend(body.get("items") or [])
 
-        items = body.get("items") or []
         if not items:
             raise MissingDataError(f"channels.list returned nothing for {channel_ids!r}")
 
@@ -142,4 +152,4 @@ class YouTubeClient:
                     ),
                 )
             )
-        return stats, charged
+        return stats, current

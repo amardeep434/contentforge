@@ -104,3 +104,63 @@ def test_quota_is_charged_before_the_call_so_failures_still_count():
     client = YouTubeClient(api_key="k", transport=exploding_transport)
     with pytest.raises(RuntimeError):
         client.search_channels("q", QuotaLedger())
+
+
+def test_get_channels_batches_ids_in_fifties():
+    """channels.list rejects more than 50 ids with HTTP 400 invalidFilters.
+
+    Three seed queries at 25 results each can yield 75 unique channels, so the
+    unbatched version failed on the first real run.
+    """
+    calls = []
+
+    def counting_transport(endpoint, params):
+        ids = params["id"].split(",")
+        calls.append(len(ids))
+        assert len(ids) <= 50, f"sent {len(ids)} ids; API caps at 50"
+        return {
+            "etag": "batched",
+            "items": [
+                {
+                    "id": cid,
+                    "snippet": {"title": cid, "publishedAt": "2025-01-01T00:00:00Z"},
+                    "statistics": {
+                        "subscriberCount": "1",
+                        "videoCount": "1",
+                        "viewCount": "1",
+                    },
+                }
+                for cid in ids
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=counting_transport)
+    stats, ledger = client.get_channels([f"UC_{n}" for n in range(120)], QuotaLedger())
+
+    assert calls == [50, 50, 20]
+    assert len(stats) == 120
+    assert ledger.spent == 3, "one unit per channels.list call"
+
+
+def test_get_channels_charges_one_unit_for_exactly_fifty():
+    def transport(endpoint, params):
+        ids = params["id"].split(",")
+        return {
+            "etag": "e",
+            "items": [
+                {
+                    "id": cid,
+                    "snippet": {"title": cid, "publishedAt": "2025-01-01T00:00:00Z"},
+                    "statistics": {
+                        "subscriberCount": "1",
+                        "videoCount": "1",
+                        "viewCount": "1",
+                    },
+                }
+                for cid in ids
+            ],
+        }
+
+    client = YouTubeClient(api_key="k", transport=transport)
+    _stats, ledger = client.get_channels([f"UC_{n}" for n in range(50)], QuotaLedger())
+    assert ledger.spent == 1
