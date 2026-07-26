@@ -61,8 +61,13 @@ niche lists with channel names and numbers. Every checkable claim, verified via 
 | American Legends | 14.1M | 14,350,373 | 38,700 | 193 | 2024-01-07 |
 | ENEM | 4.5M | 4,674,845 | 50,900 | 28 | 2023-06-25 |
 | American Secrets | 176k in 6d | 327,518 | 1,740 | 6 | 2026-06-04 |
+| Family Life English | (none stated) | 11,443,658 | 37,400 | 42 | 2026-06-12 |
+| Armory Professor | 319 subs, 1 video | 166,508 | 778 | 2 | 2014-09-21 |
+| Cinephile Unfiltered | 1.6M | 2,128,287 | 9,120 | 43 | 2025-07-23 |
 
-Four of five verify within 4%. He is reading real dashboards.
+Four of five view claims verify within 4%. He is reading real dashboards — plausibly Viewstats or vidIQ, both of which surface exactly these figures, and both of which derive earnings the same way he does.
+
+Two later checks are less clean. Armory Professor supports its claim (319 subs and 1 video at post time, 778 and 2 now — it grew after the screenshot). Cinephile Unfiltered came in at 2,128,287 against a claimed 1.6M, 33% out on a day-old post, which is too far to call a match and is recorded as unverified rather than confirmed.
 
 **But the earnings figures are not measurements.** Every one is `views × $5 ÷ 1000` —
 his own arithmetic, formatted to look like data alongside the verified view counts.
@@ -74,38 +79,88 @@ over a `$52,143` screenshot, captioned on **BikeGen - Mountain** — a channel w
 1,713,546 *lifetime* views. At his own $5 RPM that is ~$8,500 total, ever. The screenshot
 and the channel do not reconcile.
 
-## 3. Format beats topic, and volume is not the lever
+## 3. Format beats topic. Volume is not the lever — but nor is scarcity.
 
 The verified channels, by output efficiency:
 
 ```
-Explained in minutes    2 videos →  2,475,477 views   1,237,739 views/video
-ENEM                   28 videos →  4,674,845 views     166,959 views/video
-American Legends      193 videos → 14,350,373 views      74,354 views/video
-Its Just Cars!        142 videos →  6,132,088 views      43,184 views/video
+Explained in minutes    2 videos →  2,475,477 views  1,237,739/video   110,000 subs in 5 months
+Family Life English    42 videos → 11,443,658 views    272,468/video    37,400 subs in 44 days
+ENEM                   28 videos →  4,674,845 views    166,959/video
+American Legends      193 videos → 14,350,373 views     74,354/video
+Its Just Cars!        142 videos →  6,132,088 views     43,184/video    17,100 subs in 16 months
 ```
 
-A 28× spread in views-per-video across cars, US history, Brazilian exam prep and AI
-explainers. Topic does not explain it. All four are faceless, AI-assisted, tightly-scoped
+A 28x spread in views-per-video across cars, US history, Brazilian exam prep, ESL instruction
+and AI explainers. Topic does not explain it. All five are faceless, AI-assisted, tightly-scoped
 explainers — they share format, not subject.
 
-Explained in minutes cleared the 1,000-subscriber gate with **two videos in five months**.
-Its Just Cars needed **142 videos over 16 months** to reach 17,100 subscribers.
+### The correction Family Life English forces
 
-Note also Its Just Cars: 17,100 subs against 6.1M views — a 0.28% subscriber rate. Faceless
-content converts viewers to subscribers poorly, so the 1,000-sub gate costs far more views
-than it would for a face-led channel.
+An earlier draft of this document concluded that **volume is the least efficient strategy**,
+drawn from four channels where views-per-video fell as video count rose. Family Life English
+breaks that: **42 videos in 44 days** — a daily upload cadence, the highest-volume operation in
+the sample by rate — while sitting *second* in views-per-video at 272,468.
+
+So cadence and per-video performance are **independent**, not inversely related. The original
+reading mistook a small sample for a law. What separates the top and bottom rows is execution
+inside a repeatable format, not restraint.
+
+The defensible version: per-video quality is the lever, and high cadence is compatible with it
+once the format is repeatable enough to hold quality at rate. Scarcity is not itself a strategy.
+
+### The mislabel worth more than the growth number
+
+The post showcasing this channel captioned it *"New YT update, new niche to get into —
+educational kids channel might be the moves."* Both halves are wrong, and the error is
+expensive.
+
+**There was no relevant YT update.** The 2026 changes brought stronger parental controls and a
+stated emphasis on learning content. Monetization for Made for Kids is unchanged: personalized
+ads still disabled, RPM still $1–3, Super Thanks and Memberships still off.
+
+**And it is not a kids channel.** Every title is tagged `(A2 Level)` — CEFR, the Common
+European Framework for language learning. That is adult and teen ESL vocabulary, not children's
+programming. Animated family stories are the teaching vehicle; the audience is people learning
+English.
+
+That distinction decides roughly a 10x revenue difference on identical output. Labelled Made
+for Kids: $1–3 RPM, no Tier 1 path. Classified as education: $8–15 RPM, full features. Taking
+the caption at face value would have pointed straight into the COPPA trap documented in the
+niche table.
+
+**Unresolved, and not guessed at:** actual RPM. ESL audiences skew toward Vietnam, Brazil,
+Indonesia and India, where education RPM runs well below the US figures in `data/niches.csv`.
+11.4M views could be $90,000 or $9,000; nothing public separates them. Whether the channel is
+actually classified as education is visible only to its owner.
+
+### A withdrawn claim
+
+An earlier draft stated that the "$50k in revenue last 30 days" post over **BikeGen - Mountain**
+was arithmetically impossible, on the basis that the channel had 1.7M lifetime views. That was
+a **search** match, and searching by display name returns the wrong channel readily. The
+screenshot shows 42.1K subscribers and 12 videos; `@BikeGenMountain` resolves to 83.8K
+subscribers and 8 videos; and that same channel reported 1,713,546 views in one query and
+538,382 in another hours later. None of it reconciles, and the claim is **unresolved rather
+than disproven**. Handle lookup, not search, wherever a handle is available.
 
 ## 4. Decisions
 
 1. **Stop building niche research.** Public data lacks the time dimension required. Pick
    topic on RPM and on what can be sustained weekly.
-2. **Revise Plan 2 toward fewer, better videos.** The volume assumption baked into the
-   original plan is contradicted by the two highest-efficiency channels in the sample.
+2. **Plan 2 optimises per-video quality, not throughput — but does not mandate scarcity.**
+   Family Life English sustains a daily cadence at 272,468 views/video, so volume and quality
+   are not in tension once the format is repeatable. Start at low volume because it is the only
+   way to *learn* what works from retention data, not because fewer videos is inherently
+   better.
 3. **Keep the verification workflow.** Mining a social feed for named channels and checking
    each against the API cost ~3 quota units per channel and turned marketing into evidence.
    That is the one part of today worth automating.
-4. **Retention is the untested variable.** Every conclusion here is about reach, not
+4. **Audience labelling is a first-class revenue decision.** Made for Kids versus education
+   is a ~10x RPM difference on identical output, set by who the content addresses. Any
+   instructional format must be built for a stated audience, and that choice made deliberately
+   rather than inherited from the visual style.
+5. **Retention is the untested variable.** Every conclusion here is about reach, not
    watch-time, because the API exposes retention only for channels you own. That gap closes
    by publishing, not by more research.
 
@@ -114,3 +169,8 @@ than it would for a face-led channel.
 Both failed revisions shared a pattern worth naming: a metric that looked discriminating at
 small sample sizes and flattened at large ones. In both cases the small-sample result was
 the encouraging one. Check spread at full sample before believing a ranking.
+
+The same error recurred in the qualitative analysis. "Volume is the least efficient strategy"
+was drawn from four channels, held for exactly as long as it took to verify a fifth, and was
+stated as a conclusion rather than as a pattern in n=4. Four data points produce a hypothesis.
+They do not produce a law, and writing one into a spec makes it expensive to revise later.

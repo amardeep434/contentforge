@@ -298,19 +298,27 @@ data contradicts that:
 
 ```
 Explained in minutes    2 videos →  2,475,477 views   1,237,739 views/video   110,000 subs in 5 months
+Family Life English    42 videos → 11,443,658 views     272,468 views/video    42 uploads in 44 days
 ENEM                   28 videos →  4,674,845 views     166,959 views/video
 American Legends      193 videos → 14,350,373 views      74,354 views/video
 Its Just Cars!        142 videos →  6,132,088 views      43,184 views/video    17,100 subs in 16 months
 ```
 
-A 28x spread in output efficiency across the same faceless format, on four different
-topics. The volume strategy is the *least* efficient row in that table. Cranking output is
-what you do when you cannot tell which videos will work — and it is also precisely the
-shape YouTube's inauthentic-content policy targets.
+A 28x spread in output efficiency across the same faceless format, on five different topics.
+Topic does not explain it.
 
-So Plan 2 optimises per-video quality, not throughput:
+**Cadence does not explain it either, and an earlier draft of this section claimed it did.**
+That draft read "volume is the least efficient strategy" off the four channels available at the
+time. Family Life English breaks it: the highest upload rate in the sample — daily — while
+ranking *second* in views-per-video. Cadence and per-video performance are independent.
 
-- **First milestone is three videos, not thirty.** Each gets real sourcing depth.
+So Plan 2 optimises per-video quality, not throughput — and specifically **not** scarcity for
+its own sake:
+
+- **First milestone is three videos, not thirty** — because three is the smallest number that
+  teaches you anything from retention data, not because fewer is inherently better. Volume
+  scales later if the format proves repeatable at quality, as Family Life English demonstrates
+  it can.
 - **Measure before producing more.** Publish, read retention and traffic source from your
   own Analytics, then decide the next one. That is the feedback loop no amount of public
   data could provide.
