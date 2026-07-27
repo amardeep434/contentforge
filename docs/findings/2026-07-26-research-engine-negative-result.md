@@ -164,6 +164,64 @@ than disproven**. Handle lookup, not search, wherever a handle is available.
    watch-time, because the API exposes retention only for channels you own. That gap closes
    by publishing, not by more research.
 
+## 5. Tooling: what is free, what is worth paying for
+
+### YouTube autocomplete — free, unauthenticated, off-quota
+
+`https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=<term>`
+
+Returns YouTube's own autocomplete for a term. No key, no auth, no Data API quota.
+This is the same source paid keyword tools resell. Implemented in
+`research/suggest.py`, filtered to phrases of three words or more.
+
+It fixes an input we were hand-authoring. `data/niches.csv` seed queries were
+written from guesswork, and head terms return the same incumbents for every
+niche — the failure that defeated revision 1. Autocomplete returns what people
+actually type:
+
+```
+learn english with tv series      learn english through story
+learn english with jessica        learn english for kids
+```
+
+What it does not give: search *volume*. Only the phrasings, ranked.
+
+### vidIQ — has an API, and an earlier draft of this document said it did not
+
+That claim came from a third-party comparison listing stating no API was
+"advertised", which is absence of evidence rather than evidence of absence. It
+was wrong.
+
+vidIQ exposes an **MCP server** at `https://mcp.vidiq.com/mcp`, authenticated by
+API key or OAuth, read-only, with 34 tools including `keyword_research`,
+`outliers`, `channel_stats`, `similar_channels` and `trending_videos` at 5
+credits per call. It requires the **Max** plan (~$39/month billed annually).
+
+Per vidIQ's documentation the server runs on their own data infrastructure
+rather than the YouTube Data API — meaning `outliers` and `keyword_research`
+may cover the two gaps this document records as unfillable: keyword volume, and
+the historical baseline whose absence defeated both research revisions.
+
+Unverified, and the reason not to buy on the strength of this paragraph: whether
+`outliers` exposes the underlying time series or only a computed score. A score
+alone does not restore the time dimension.
+
+### Viewstats / Channelytics — no new data
+
+Viewstats' own documentation states it "gets its info from YouTube's public API,
+just like what you see on public YouTube pages." A better interface over data we
+already pull. Its outlier score is computed as views against the channel average
+*at that point in time* — which is the age-and-size-cancelling comparison that
+both our failed revisions should have used, and confirmation the approach is
+sound rather than invented here.
+
+### Social Blade — sells the missing variable
+
+Business API, paid, up to 3 years of daily historical performance data per
+channel. That is precisely the time dimension the Data API withholds. No revenue
+access — every earnings figure from Social Blade, Viewstats and vidIQ alike is an
+estimate derived from views.
+
 ## Method note
 
 Both failed revisions shared a pattern worth naming: a metric that looked discriminating at
