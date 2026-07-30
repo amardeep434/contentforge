@@ -27,14 +27,24 @@ videos exist to produce that data. They are an instrument, not a launch.
 | Public-domain artworks only | C-033 — *Bridgeman v. Corel*, EU DSM Art. 14 |
 | Crude-but-clear visuals; no polish budget | **C-011** — a crude video beat its polished sibling 57x |
 | One fixed opening style, chosen once | C-027 — opening style is a channel-level constant |
+| Narration backend is a decision, not a default | C-049 — no free TTS matches a human reading their own prose |
 | Per-video authored substance | C-032 — the inauthentic-content monetisation gate |
 | Rank nothing on mean views | C-003 |
 
 **Expected outcome, stated so we cannot quietly move the goalposts:** roughly
 **26,000 median views** and **~$100–200 per video**, anchored on Narrative Art
-History (C-035), *not* on Art History Explained's 112,000 median. The exemplar is
-the ceiling, not the forecast. If the first three land near 26,000 that is the
-plan working.
+History (C-035), *not* on Art History Explained's 112,000 median.
+
+⚠️ **Revised 2026-07-30.** Art History Explained turns out to be Christopher P
+Jones, an art-history writer narrating his own work with a 6,000-subscriber
+Substack behind him (C-048). It is not a faceless channel and its numbers are not
+a target an AI pipeline should expect to reach. Anchoring on Narrative Art
+History was already the plan; that now looks conservative in the right direction,
+and even it is a channel whose production model is unverified.
+
+The niche still stands, but on the copyright position, the absence of aviation's
+advertiser-suitability exposure, and the architecture fit — not on demand
+evidence.
 
 ### Explicit non-goals
 

@@ -365,7 +365,12 @@ performing, at 8.1x median skew.
 *Caveat:* one search query per niche. A niche is not proven empty by one query.
 
 ### C-023 · Art History Explained is the only reachable repeatable profile found
-**Status:** `HYPOTHESIS` · 2026-07-29 · n=8 videos
+**Status:** `WITHDRAWN` · 2026-07-30 · n=8 videos
+
+> **Withdrawn:** the channel is Christopher P Jones, an art-history writer
+> narrating his own work, with a 6,000-subscriber Substack behind him (C-048).
+> Reachable in subscriber count, repeatable in output — but not by an AI-assisted
+> pipeline, and not from a standing start.
 
 16,700 subs producing a 112,326 median — **6.7 views per subscriber**, against
 4.2 for the next best and under 2.0 for most — at skew 1.0. Small, recent,
@@ -497,7 +502,14 @@ not.
 ## Decisions
 
 ### C-034 · Long-form public-domain art history is the right niche to enter
-**Status:** `HYPOTHESIS` · 2026-07-30 · rests on C-023 (n=8) and C-021 (n=14)
+**Status:** `HYPOTHESIS` · 2026-07-30 · now rests on risk and feasibility alone
+
+> **Revised 2026-07-30:** C-023, one of the two claims this rested on, is
+> withdrawn — the exemplar is a human art writer, not a faceless operation
+> (C-048). The demand argument is gone. What survives is the copyright position
+> (C-033), the absence of aviation's advertiser-suitability exposure, and the fit
+> with the provenance architecture. The 2026-07-30 revision below had already
+> concluded those were the real grounds.
 
 Full reasoning: [2026-07-30-niche-recommendation.md](2026-07-30-niche-recommendation.md).
 
@@ -892,3 +904,69 @@ in `data/samples/` beside a 45-second reference clip for comparison.
 *Not to be confused with a finding about retention.* Matching the exemplar's pace
 is a reasonable default, not evidence that 142 wpm performs better than 162. That
 would need our own data (C-028).
+
+### C-048 · Art History Explained is a faceless AI-assisted channel
+**Status:** `REFUTED` · 2026-07-30
+
+It is **Christopher P Jones**, a writer on art history, narrating his own work.
+The video descriptions carry "you can leave me a tip at ko-fi.com/christopherpjones"
+and link a personal Substack with 6,000+ subscribers.
+
+Found because the narration sounded human to a listener and I went looking for
+why. I had watched four of its videos, read every transcript and profiled the
+channel across three scans without ever noticing it was a named person with a
+tip jar in the description.
+
+**What this invalidates.** The channel was selected as our exemplar (C-023) and
+carried the niche recommendation (C-034) on the strength of being the only
+*reachable repeatable* profile found. It is reachable in subscriber count and it
+is repeatable — but not by us:
+
+- Its advantage is plausibly domain expertise and writing quality, and an
+  audience already assembled elsewhere. A 6,000-subscriber newsletter is a
+  launch platform a new channel does not have.
+- **C-035 is now explained rather than merely observed.** "The niche does not
+  confer the profile" was recorded as a puzzle; the answer is that the profile
+  belongs to Christopher P Jones, not to art history.
+- Its skew of 1.0 across nine videos may reflect a consistent author rather than
+  a reproducible format.
+
+**What survives.** The niche recommendation's other grounds are untouched: the
+public-domain copyright position (C-033), absence of the advertiser-suitability
+exposure that aviation carries, and the fit with the provenance architecture.
+Those were always the stronger arguments — see the 2026-07-30 revision, which
+already concluded the recommendation rested on risk and feasibility rather than
+on demand evidence.
+
+**Consequence for expectations.** Anchoring on Narrative Art History (~26,000
+median) rather than the exemplar was already the plan. That now looks
+conservative in the right direction, and even it is a channel whose production
+model we have not verified.
+
+*The general lesson, and this project keeps paying for it:* a channel's
+measurable properties say nothing about who is behind it, and "faceless" was
+assumed from the format rather than checked. One line in a video description
+would have settled it at any point in the past week.
+
+### C-049 · A free TTS voice can match the exemplar's narration
+**Status:** `REFUTED` · 2026-07-30 · six voices rejected by a listener
+
+Six edge-tts voices were generated reading the exemplar's actual Cezanne
+opening — including the newer Multilingual tier (Andrew, Brian) that
+`en-GB-RyanNeural` predates. A human listener judged all six as obviously
+synthetic against a reference clip that sounded natural.
+
+They were right, and for a structural reason: **the reference is not TTS at
+all** (C-048). No text-to-speech setting matches a person reading their own
+prose.
+
+*Options, none free-and-equal:*
+1. Accept an audibly synthetic narrator and the gap it carries.
+2. Kokoro-82M — local, free, no key, materially better than edge-tts. Still TTS.
+3. Narrate in the operator's own voice. Free, unbounded quality, but ~20 minutes
+   of recording per video against the stated 1–2 hrs/week budget.
+4. ElevenLabs. Paid, and the constraint is zero spend until it earns.
+
+*Recorded as a decision the operator has to make*, not one the pipeline can
+resolve. `synthesise()` takes an injected runner precisely so the backend is a
+one-line swap.
