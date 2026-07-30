@@ -59,9 +59,20 @@ plan working.
   `license`, `credit_line`, `retrieved_at`
 - `assert_public_domain(artist_death_year, now) -> None` — raises below life+70
 
-Open-access APIs, all free, no key: the Art Institute of Chicago
-(`api.artic.edu/api/v1/artworks/search`), the Met
-(`collectionapi.metmuseum.org/public/collection/v1`), and Wikimedia Commons.
+**Implemented 2026-07-30** across two sources, both free and keyless:
+
+- `sourcing/artworks.py` — the Met's open-access collection
+- `sourcing/commons.py` — Wikimedia Commons
+
+Two sources because one is not enough (C-045): the Met holds **no** open-access
+Monet, Renoir or Klimt, while Commons returns 22, 28 and 15 respectively. The
+Art Institute of Chicago was tried first and dropped — its image host answers
+with a Cloudflare challenge instead of a JPEG.
+
+Each source has its own trap, and each is covered by a test built from a real
+result: the Met's `artistOrCulture` search flag returns 0 for every artist, and
+on Commons the `Artist` field names the *photographer* rather than the painter
+(C-046).
 
 **The licence gate is not optional.** C-033 holds only for artworks that are
 themselves public domain. Cézanne (d. 1906), Degas (1917), Klimt (1918), Monet
@@ -69,17 +80,18 @@ themselves public domain. Cézanne (d. 1906), Degas (1917), Klimt (1918), Monet
 does not until 2043. A run that cannot establish an artist's death year must
 fail, not guess.
 
-- [ ] **Step 1: Failing tests**
-  - an artwork without a licence field is rejected, not defaulted
-  - `assert_public_domain` raises for a 1973 death in 2026
-  - `assert_public_domain` passes for 1906
-  - the credit line survives into the record (museums ask for attribution even
-    where copyright does not apply — C-033's contractual caveat)
-  - a search returning zero artworks raises `MissingDataError` rather than
-    returning `[]`
-- [ ] **Step 2: Implement**
-- [ ] **Step 3: Run tests**
-- [ ] **Step 4: Commit** — `feat: source public-domain artworks with a licence gate`
+- [x] **Step 1: Failing tests**
+- [x] **Step 2: Implement** — the Met
+- [x] **Step 3: Wikimedia Commons as a second source**
+- [x] **Step 4: Run tests** — 45 tests across both sources, 291 total
+- [x] **Step 5: Commit**
+
+Verified live: Picasso returns 0 from both sources (in copyright until 2044),
+Cezanne and Degas return only their own works, Commons covers the artists the
+Met does not, and images download as valid JPEGs.
+
+Use `survey_artists()` before committing to a subject — availability does not
+follow fame or death date.
 
 ## Task 2: Voice
 

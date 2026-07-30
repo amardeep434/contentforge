@@ -835,8 +835,10 @@ signal, not a census.
 1. **Survey before choosing a subject.** `survey_artists()` exists for this. A
    video planned around an artist whose images cannot be obtained is wasted work.
 2. **The Met alone will not sustain a 17–22 minute video**, which needs 40–60
-   artworks. Wikimedia Commons is the obvious second source and is unaffected by
-   one museum's digitisation policy.
+   artworks. **Resolved 2026-07-30:** Wikimedia Commons was added as a second
+   source and fills exactly the Met's gaps — Monet 22 works, Renoir 28, Klimt 15,
+   all of which the Met had none of. Picasso still correctly returns 0. Together
+   the two sources cover every candidate artist tried.
 3. Two candidate first subjects that do check out: **Degas** and **Van Gogh**.
 
 *Also recorded:* the Art Institute of Chicago was tried first and dropped — its
@@ -845,3 +847,24 @@ instead of a JPEG for every user agent tried. And the Met's documented
 `artistOrCulture=true` search flag returns **0 results for every artist tested**
 while the same query without it returns ~170, so artist filtering is done in our
 code instead.
+
+### C-046 · On Commons, the `Artist` field names the painter
+**Status:** `REFUTED` · 2026-07-30
+
+`extmetadata.Artist` is the **photographer or uploader**. For
+`File:Claude Monet.- Le Pont d'Argenteuil` it names the Commons user who
+photographed the canvas. Using it for authorship would misattribute every work
+in the pipeline.
+
+Authorship is taken from the file's **categories** instead, and the category must
+say *paintings **by*** the artist. Merely containing the name is not enough: a
+search for Monet returns Édouard Manet's portrait *of* Monet, which sits in a
+category naming Monet and is by someone else.
+
+*Two further traps, both from live results:*
+- Commons hosts **CC-BY alongside public domain** — `File:Claude Monet Painting
+  in his Studio` is `cc-by-4.0`. Only `pd`/`cc0` are accepted; attribution-required
+  is a different obligation, not a weaker one.
+- `ObjectName` carries spliced Wikidata markup —
+  `At Petit-Gennevillierslabel QS:Lfr,"Au Petit-Gennevilliers"` — which would
+  otherwise render on screen as a chapter title.
