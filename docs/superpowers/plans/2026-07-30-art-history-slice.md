@@ -104,11 +104,24 @@ Carried over unchanged from Plan 2 Task 5 — it was never contentious.
 Citation markers are for the validator and the description. `[1]` must never be
 spoken. Add `edge-tts` to `pyproject.toml`.
 
-- [ ] **Step 1: Failing tests** — markers removed, spacing left clean, unmarked
-      text unchanged, an empty script raises
-- [ ] **Step 2: Implement**
-- [ ] **Step 3: Run tests**
-- [ ] **Step 4: Commit** — `feat: add narration with citation stripping`
+- [x] **Step 1: Failing tests** — 19 of them
+- [x] **Step 2: Implement**
+- [x] **Step 3: Run tests** — 310 total
+- [x] **Step 4: Commit**
+
+**Done 2026-07-30.** Verified live: 12.94s of speech from a sample paragraph,
+35 word timings, no citation marker spoken, valid MP3.
+
+Two things worth carrying into Task 3:
+
+- `Narration` returns **word-level timings**, not just a duration. edge-tts >=7
+  defaults to `SentenceBoundary` and then emits no word events at all, so
+  `boundary="WordBoundary"` is requested explicitly. Task 3's requirement that
+  shot durations sum to the narration duration is now measurable rather than
+  estimated.
+- Output is 24 kHz mono at 48 kbps. That is edge-tts's fixed format and is fine
+  for narration — YouTube re-encodes regardless — but it is not a knob that
+  exists if the audio is ever judged thin.
 
 ## Task 3: Visual composition
 
