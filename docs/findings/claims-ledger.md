@@ -382,7 +382,105 @@ confound this and it is not resolved.
 ### C-025 · Does the winning format survive the "inauthentic content" policy?
 **Status:** `OPEN`
 
-The policy (renamed 2026-07-15) bans mass-produced templates and verbatim
+The policy (renamed 2025-07-15) bans mass-produced templates and verbatim
 readings. A rigid per-video template is exactly what these channels run. Whether
 the authored-visuals distinction (C-017) is what keeps them compliant is
 untested and consequential — it gates monetisation.
+
+---
+
+## Legal and policy risk
+
+### C-029 · Copying a format or template risks a copyright strike
+**Status:** `REFUTED` · 2026-07-30
+
+Copyright protects expression, not ideas, formats, systems or titles. A title
+pattern ("Every X Explained in N Minutes"), a video structure, a chapter scheme
+and a niche are all unprotectable. Nothing in copying a *format* creates strike
+exposure.
+
+A copyright strike arises only from a **valid legal removal request** over
+specific copied expression — footage, images, music, or text. Three strikes
+terminate the channel; each expires after 90 days with Copyright School.
+
+*Source:* [Understanding copyright strikes](https://support.google.com/youtube/answer/2814000).
+
+### C-030 · Content ID claims are copyright strikes
+**Status:** `REFUTED` · 2026-07-30
+
+Distinct mechanisms. "Content ID claims are different from copyright strikes. If
+you get a Content ID claim on your video, it typically doesn't result in a
+copyright strike." A claim redirects or blocks monetisation; it is not a channel
+penalty. **Disputing one without valid grounds** can escalate into a removal
+request, which does strike.
+
+*Consequence:* the practical music/footage risk is silent demonetisation via
+Content ID, not termination.
+
+*Source:* [Understanding copyright strikes](https://support.google.com/youtube/answer/2814000).
+
+### C-031 · Reusing found assets is the actual strike exposure
+**Status:** `CONFIRMED` · 2026-07-30
+
+The failing copycat examined on 2026-07-29 pasted in third-party reference
+charts, including a Kung Fu stance diagram still labelled in French. That is
+copying of protected expression and is actionable, regardless of format.
+
+*Build rule:* no found images, no scraped diagrams, no third-party footage, no
+unlicensed music. Every visual asset must be public domain, openly licensed with
+attribution recorded, or generated for the video.
+
+### C-032 · The binding risk is monetisation eligibility, not strikes
+**Status:** `CONFIRMED` · 2026-07-30
+
+YouTube's inauthentic content policy — renamed from "repetitious content" on
+**15 July 2025** — makes ineligible for monetisation:
+
+- "Similar or repetitive content with low educational value"
+- "AI-generated content made with generic or unoriginal templates"
+- content "made with a template" where each video "doesn't deliver creative,
+  educational, or other value"
+- "Content downloaded or copied from another online source without any
+  substantive modifications"
+
+Separately the reused content policy requires that borrowed material be changed
+"significantly", with "significant original commentary, substantive
+modifications, or educational or entertainment value".
+
+**This is aimed squarely at what this project builds.** It does not strike the
+channel; it withholds the money, which for the stated goal is equally fatal, and
+it is judged by human review at YPP application.
+
+*Consequence:* the per-video differentiation mechanisms in the spec (§4) are not
+optional polish — they are the monetisation gate. Note the tension with the
+2026-07-29 finding that winning channels run rigid templates (C-010): they pass
+because each video carries distinct authored substance, not because the template
+is varied.
+
+*Source:* [YouTube channel monetization policies](https://support.google.com/youtube/answer/1311392).
+
+### C-033 · Public-domain artworks are a low-copyright-risk visual source
+**Status:** `CONFIRMED` · 2026-07-30 · with jurisdictional caveats
+
+Faithful photographic reproductions of public-domain 2D artworks carry no new
+copyright. *Bridgeman Art Library v. Corel*, 36 F. Supp. 2d 191 (S.D.N.Y. 1999)
+held such transparencies lack originality: a change of medium from painting to
+photograph is not itself original. In the EU, Article 14 of the 2019 Copyright in
+the Digital Single Market Directive was written specifically to stop museums
+asserting rights over reproductions of public-domain visual art, and applies to
+any reproduction, not only photographs.
+
+**Caveats that matter:** Bridgeman is a district-court decision — persuasive, not
+binding nationally. Museums may still impose *contractual* terms on downloads
+even where copyright does not apply. And the artwork itself must actually be
+public domain: Cézanne (d. 1906), Degas (d. 1917), Klimt (d. 1918), Monet
+(d. 1926), Klee (d. 1940) and Kandinsky (d. 1944) all clear life+70, but a 20th
+century artist such as Picasso (d. 1973) does not until 2043.
+
+*Consequence:* an art-history format has a **better** copyright position than an
+aviation one, which leans on news footage and broadcast material. US federal
+works (NTSB reports and imagery) are public domain, but network news video is
+not.
+
+*Sources:* [Bridgeman v. Corel](https://law.justia.com/cases/federal/district-courts/FSupp2/36/191/2413183/),
+[Article 14 and the public domain](https://pro.europeana.eu/post/article-14-and-the-public-domain-the-state-of-play-across-europe).

@@ -40,7 +40,7 @@ Threads pays creators nothing — no payout program exists as of 2026. It is a t
 
 ## 4. The policy problem, and how the architecture answers it
 
-YouTube's "inauthentic content" policy (renamed 2026-07-15) disqualifies two things this project would otherwise produce by default:
+YouTube's "inauthentic content" policy (renamed 2025-07-15) disqualifies two things this project would otherwise produce by default:
 
 1. *"Mass-produced templates reused across multiple videos with the same structure and content patterns."*
 2. *"Readings of other materials you did not create — text from websites read verbatim."*
