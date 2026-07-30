@@ -781,3 +781,29 @@ better than flashy effects" (C-011).
 `agent-reach doctor` reports these platforms as `warn` even when the bridge is
 connected, because it deliberately never runs a platform command to verify a
 login. `warn` is not a fault.
+
+### C-044 · Varying script structure per video is required by policy
+**Status:** `REFUTED` · 2026-07-30 · n=9 (Art History Explained) + every channel measured
+
+The spec's §4 founding principle read: *"No two consecutive videos share a shape.
+There is no script template in this codebase."* It was written to satisfy the
+inauthentic-content policy by structural variation.
+
+Every channel measured contradicts it. **All of them run rigid templates.** Art
+History Explained uses the identical "The Life and Art of X" structure nine times
+for a 111,040 median; Bluntly Explained, Explainer Chris and Pilot Debrief are
+equally formulaic. Opening style is a channel-level constant, not a per-video
+variable (C-027) — so deliberately varying structure would be imitating the
+channels that fail, not the ones that work.
+
+*What actually satisfies the policy* is per-video **authored substance**: research
+specific to that subject rather than a name substituted into a frame (C-032). The
+template is the format; the substance is the differentiator. YouTube's wording
+targets content where "each video doesn't deliver creative, educational, or other
+value" — not repeated structure.
+
+*Consequence:* `script/generate.py`'s rotating "narrative shapes" mechanism
+optimises against the evidence. Plan 3 holds structure fixed and varies content.
+
+*Note the asymmetry this project keeps rediscovering:* a rule adopted to be safe
+can be as wrong as one adopted to be clever, and costs just as much.
