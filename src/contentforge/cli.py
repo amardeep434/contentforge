@@ -220,6 +220,20 @@ def main(argv: list[str] | None = None) -> int:
         "--limit", type=int, default=20, help="maximum posts to print"
     )
 
+    leads = subparsers.add_parser(
+        "leads",
+        help="stage 1: gather Threads claims + screenshots for a query (no quota)",
+    )
+    leads.add_argument("query")
+    leads.add_argument("--tags", action="store_true")
+    leads.add_argument("--out", type=Path, default=None)
+
+    leads_verify = subparsers.add_parser(
+        "leads-verify",
+        help="stage 2: resolve and profile every named channel (~2 units each)",
+    )
+    leads_verify.add_argument("run_dir", type=Path)
+
     verify = subparsers.add_parser(
         "verify", help="check a claimed channel statistic against the API"
     )
@@ -233,6 +247,34 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "leads":
+        from contentforge.providers.threads_research import search_threads
+        from contentforge.research.leads import gather_leads, save_leads
+
+        now = datetime.now(timezone.utc)
+        run_dir = args.out or Path("data/leads") / (
+            f"{now:%Y-%m-%d}-{re.sub(r'[^a-z0-9]+', '-', args.query.lower()).strip('-')}"
+        )
+        gathered = gather_leads(
+            args.query,
+            run_dir,
+            search=search_threads,
+            serp_type="tags" if args.tags else "default",
+        )
+        save_leads(gathered, run_dir, args.query, now)
+        named = sum(1 for lead in gathered if lead.handles_from_text)
+        shots = sum(len(lead.image_paths) for lead in gathered)
+        print(f"{len(gathered)} posts -> {run_dir}")
+        print(f"  handles found in captions: {named}")
+        print(f"  screenshots downloaded:    {shots}")
+        print(
+            "\nNext: read the screenshots in "
+            f"{run_dir / 'images'} and record any channel names with\n"
+            "  add_image_handles(run_dir, {permalink: [handles]})\n"
+            f"then run: pipeline leads-verify {run_dir}"
+        )
+        return 0
 
     if args.command == "threads":
         from contentforge.providers.threads_research import (
@@ -275,6 +317,59 @@ def main(argv: list[str] | None = None) -> int:
             value = f"{reading.spent:,}" if reading.is_known else "UNKNOWN"
             print(f"  {quota_id:<24} {value}")
             print(f"                   {reading.detail}")
+        return 0
+
+    if args.command == "leads-verify":
+        from contentforge.research.leads import (
+            load_leads,
+            profile_views,
+            write_report,
+        )
+
+        query, gathered = load_leads(args.run_dir)
+        client = client_for()
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        rows = []
+        for lead in gathered:
+            for handle in lead.all_handles:
+                try:
+                    facts, ledger = client.channel_by_handle(handle, ledger)
+                    playlists, ledger = client.get_uploads_playlists(
+                        [facts.channel_id], ledger
+                    )
+                    ids, ledger = client.get_playlist_video_ids(
+                        playlists[facts.channel_id], ledger, max_videos=50
+                    )
+                    videos, ledger = client.get_videos(ids, ledger)
+                except ContentforgeError as error:
+                    print(f"  @{handle}: {str(error)[:90]}")
+                    continue
+                long_form = [
+                    v.view_count.value
+                    for v in videos
+                    if v.duration_seconds.value >= 120
+                ]
+                if not long_form:
+                    print(f"  @{handle}: no long-form videos")
+                    continue
+                profile = profile_views(long_form)
+                profile.update(
+                    handle=handle,
+                    subs=facts.subscribers.value,
+                    permalink=lead.permalink,
+                )
+                rows.append(profile)
+                mark = "REPEATABLE" if profile["repeatable"] else ""
+                print(
+                    f"  @{handle}: {facts.subscribers.value:,} subs, "
+                    f"median {profile['median']:,}, skew {profile['skew']} {mark}"
+                )
+        save_ledger(ledger_path, ledger, now, started)
+        report = write_report(rows, gathered, args.run_dir, query)
+        print(f"\n{len(rows)} channels profiled. Report: {report}")
+        print(f"Quota spent this run: {ledger.spent - started}")
         return 0
 
     if args.command == "verify":

@@ -38,3 +38,6 @@ venv/
 
 # quota lock sidecars
 data/quota/*.lock
+
+# lead runs: regenerable, and the screenshots are third-party content
+data/leads/

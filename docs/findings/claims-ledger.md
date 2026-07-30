@@ -136,7 +136,7 @@ the headline conclusion survived the redo.
 ## Channel identity
 
 ### C-008 · Channel handles must never be guessed from display names
-**Status:** `CONFIRMED` · 2026-07-29 · 3 failures out of 3 attempts
+**Status:** `CONFIRMED` · 2026-07-30 · 4 failures out of 4 attempts
 
 Every attempt to guess a handle hit the wrong channel:
 
@@ -145,12 +145,19 @@ Every attempt to guess a handle hit the wrong channel:
 | `@BikeGenMountain` | irreconcilable numbers; a revenue claim was withdrawn on bad data |
 | `@Brainosophy` | a 1,674-view channel; the real one is `@brainosophic` |
 | `@PaintProfessor` | 154 subs, 1,579 lifetime views — not the channel cited |
+| `@ultrasfctv` | invented by completing a tooltip-covered `@ultrasfct…`; resolved to an unrelated 217-sub channel while the screenshot showed 1.3M views |
 
 `channels.list` with `forHandle` costs 1 unit and returns the exact channel;
 `search.list` costs 100 and returns a guess.
 
 *Consequence:* the `paintprof_*.jpg` reference thumbnails in `data/samples/refs/`
 are of unverified provenance and must not be cited.
+
+*The fourth failure happened while building the skill designed to prevent it* -
+a truncated handle in a screenshot is as dangerous as a display-name search. The
+`leads-verify` stage caught it because the profile (median 342) contradicted the
+screenshot (1.3M views), which is now the documented check: a contradiction means
+a bad handle, not a surprising channel.
 
 ### C-009 · Paint Professor is a successful channel worth emulating
 **Status:** `WITHDRAWN` · 2026-07-29 · n=6
