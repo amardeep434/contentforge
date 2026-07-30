@@ -484,3 +484,43 @@ not.
 
 *Sources:* [Bridgeman v. Corel](https://law.justia.com/cases/federal/district-courts/FSupp2/36/191/2413183/),
 [Article 14 and the public domain](https://pro.europeana.eu/post/article-14-and-the-public-domain-the-state-of-play-across-europe).
+
+---
+
+## Decisions
+
+### C-034 · Long-form public-domain art history is the right niche to enter
+**Status:** `HYPOTHESIS` · 2026-07-30 · rests on C-023 (n=8) and C-021 (n=14)
+
+Full reasoning: [2026-07-30-niche-recommendation.md](2026-07-30-niche-recommendation.md).
+
+Chosen over aviation — the strongest niche by repeatability (C-021) — on four
+grounds that bind harder than raw niche strength:
+
+1. **Reachability.** Art History Explained produces a 112,326 median from 16,700
+   subscribers (6.7 views/sub, C-023). Both aviation exemplars sit at 237K and
+   1.03M, where nothing can be inferred about a new channel — the error C-007 was
+   withdrawn for.
+2. **Copyright.** Public-domain artworks carry no reproduction copyright (C-033)
+   and open-access museum APIs supply them at scale. Aviation's watchable footage
+   is news and CCTV (C-030).
+3. **Advertiser suitability.** Accident content with "visible injury or extreme
+   impact moments" earns limited ads; content that "profits from or exploits a
+   sensitive event" earns none. A crash-analysis channel carries that risk on
+   every video.
+4. **Architecture fit.** Biographical facts resolve to citable sources, which is
+   what `provenance.py` and `script/validate.py` already enforce.
+
+**Known weaknesses, not hidden:** history RPM is mid-tier at a nominal $5–12
+against tech's $15–25 — and those figures come from marketing blogs of the tier
+rejected as unusable on 2026-07-29, so they are directional at best. n=8 is the
+thinnest sample in the repeatable table. And the deciding capability — turning a
+biography into a narrative with stakes — is untested and unresolvable
+observationally (C-028).
+
+*Falsifiers, both cheap:* Art History Explained's next 4–6 videos regressing to
+its 3.7K–5.2K floor (2 quota units to check); or a repeatable channel under ~30K
+subscribers surfacing in finance, business or tech, none of which the scan
+covered properly — re-filterable from the 1,189 stored candidates at zero quota.
+
+*Source for advertiser suitability:* [Advertiser-friendly content guidelines](https://support.google.com/youtube/answer/6162278).
