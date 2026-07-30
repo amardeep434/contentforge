@@ -238,6 +238,17 @@ def main(argv: list[str] | None = None) -> int:
         help="stage 2: resolve and profile every named channel (~2 units each)",
     )
     leads_verify.add_argument("run_dir", type=Path)
+    leads_verify.add_argument(
+        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+
+    pots = subparsers.add_parser(
+        "potentials", help="show every channel verified so far"
+    )
+    pots.add_argument(
+        "--path", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+    pots.add_argument("--all", action="store_true", help="print every row")
 
     verify = subparsers.add_parser(
         "verify", help="check a claimed channel statistic against the API"
@@ -252,6 +263,24 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "potentials":
+        from contentforge.research.potentials import load_potentials, summarise
+
+        rows = load_potentials(args.path)
+        if not rows:
+            print(f"no potentials yet at {args.path}")
+            return 0
+        print(summarise(rows))
+        if args.all:
+            print()
+            for row in rows:
+                print(
+                    f"  {row.status:<10} {row.label:<26} {row.subs:>9,} subs  "
+                    f"median {row.median:>9,}  skew {row.skew:>5}  "
+                    f"{'repeatable' if row.repeatable else ''}"
+                )
+        return 0
 
     if args.command == "leads":
         from contentforge.providers.threads_research import search_threads
@@ -372,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
                     handle=handle,
                     subs=facts.subscribers.value,
                     permalink=lead.permalink,
+                    channel_id=facts.channel_id,
+                    title=facts.title,
                 )
                 rows.append(profile)
                 mark = "REPEATABLE" if profile["repeatable"] else ""
@@ -381,6 +412,24 @@ def main(argv: list[str] | None = None) -> int:
                 )
         save_ledger(ledger_path, ledger, now, started)
         report = write_report(rows, gathered, args.run_dir, query)
+
+        # Verified channels outlive the run that found them.
+        from contentforge.research.potentials import (
+            from_profile,
+            load_potentials,
+            save_potentials,
+            summarise,
+            upsert,
+        )
+
+        existing = load_potentials(args.potentials)
+        merged = upsert(
+            existing,
+            [from_profile(row, now, source=row["permalink"]) for row in rows],
+        )
+        save_potentials(args.potentials, merged)
+        print(f"\nPotentials: {args.potentials} (+{len(merged) - len(existing)} new)")
+        print(summarise(merged))
         print(f"\n{len(rows)} channels profiled. Report: {report}")
         print(f"Quota spent this run: {ledger.spent - started}")
         return 0
