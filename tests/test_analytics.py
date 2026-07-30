@@ -93,3 +93,29 @@ def test_tally_counts_each_status():
         ]
     )
     assert tally(verdicts) == {EXEMPLAR: 1, WATCH: 1, REJECT: 1}
+
+
+def test_a_personal_brand_is_never_an_exemplar():
+    # The exemplar this project chose a niche around turned out to be an art
+    # writer narrating his own work, with a 6,000-subscriber newsletter behind
+    # him. Reachable and repeatable, but not by a pipeline (C-048).
+    verdict = judge(
+        measurement(operator="personal", operator_evidence="tip jar: ko-fi.com")
+    )
+    assert verdict.status == WATCH
+    assert "personal brand" in verdict.reason
+    assert "ko-fi.com" in verdict.reason
+
+
+def test_an_unchecked_operator_does_not_block_an_exemplar():
+    # `unknown` means the check found nothing, not that a person was found.
+    # Blocking on it would reject every channel never checked.
+    assert judge(measurement(operator="unknown")).status == EXEMPLAR
+    assert judge(measurement()).status == EXEMPLAR
+
+
+def test_the_personal_check_runs_after_the_measurable_ones():
+    # A lottery-shaped personal channel should be reported as lottery-shaped;
+    # that is the more fundamental problem.
+    verdict = judge(measurement(skew=9.0, operator="personal"))
+    assert "9.0x the median" in verdict.reason

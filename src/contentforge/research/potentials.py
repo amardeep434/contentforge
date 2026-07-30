@@ -33,6 +33,8 @@ FIELDS = (
     "max_views",
     "repeatable",
     "views_per_sub",
+    "operator",
+    "operator_evidence",
     "verdict",
     "verdict_reason",
     "criteria_version",
@@ -78,6 +80,8 @@ class Potential:
     max_views: int
     repeatable: bool
     views_per_sub: float
+    operator: str
+    operator_evidence: str
     verdict: str
     verdict_reason: str
     criteria_version: str
@@ -132,6 +136,8 @@ def from_profile(
         max_views=int(profile["max"]),
         repeatable=bool(profile["repeatable"]),
         views_per_sub=round(int(profile["median"]) / subs, 2),
+        operator=profile.get("operator", "unknown"),
+        operator_evidence=profile.get("operator_evidence", ""),
         verdict=verdict.status if verdict else "",
         verdict_reason=verdict.reason if verdict else "",
         criteria_version=verdict.criteria_version if verdict else "",
@@ -163,6 +169,8 @@ def load_potentials(path: Path) -> list[Potential]:
                 max_views=int(record["max_views"]),
                 repeatable=record["repeatable"] == "True",
                 views_per_sub=float(record["views_per_sub"]),
+                operator=record.get("operator", "unknown"),
+                operator_evidence=record.get("operator_evidence", ""),
                 verdict=record.get("verdict", ""),
                 verdict_reason=record.get("verdict_reason", ""),
                 criteria_version=record.get("criteria_version", ""),

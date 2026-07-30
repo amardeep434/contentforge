@@ -494,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "leads-resolve":
+        from contentforge.research.authorship import channel_url, check_channel
         from contentforge.research.leads import load_leads, profile_views
         from contentforge.research.seen import (
             LOOKUP_FAILED,
@@ -531,17 +532,24 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  @{handle}: no long-form videos")
                     continue
                 record = profile_views(long_form)
+                # Free, no quota: is this a faceless operation or a person?
+                # Selecting an exemplar without asking cost this project a week
+                # (C-048).
+                operator = check_channel(channel_url(facts.channel_id))
                 record.update(
                     channel_id=facts.channel_id,
                     handle=handle,
                     title=facts.title,
                     subs=facts.subscribers.value,
                     permalink=lead.permalink,
+                    operator=operator.kind,
+                    operator_evidence=operator.evidence,
                 )
                 measurements.append(record)
+                flag = "  [PERSONAL BRAND]" if operator.is_personal else ""
                 print(
                     f"  @{handle}: {facts.subscribers.value:,} subs, "
-                    f"median {record['median']:,}, skew {record['skew']}"
+                    f"median {record['median']:,}, skew {record['skew']}{flag}"
                 )
         save_ledger(ledger_path, ledger, now, started)
         (args.run_dir / "measurements.json").write_text(

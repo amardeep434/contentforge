@@ -34,6 +34,10 @@ MIN_HIT_RATE = 40.0
 #: large channels is the error C-007 was withdrawn for.
 REACHABLE_MAX_SUBS = 80_000
 
+#: Mirrors research.authorship.PERSONAL. Duplicated rather than imported to keep
+#: this module free of dependencies - it must stay pure.
+PERSONAL = "personal"
+
 EXEMPLAR = "exemplar"
 WATCH = "watch"
 REJECT = "reject"
@@ -47,7 +51,7 @@ class Verdict:
     criteria_version: str = CRITERIA_VERSION
 
 
-def judge(measurement: dict) -> Verdict:
+def judge(measurement: dict) -> Verdict:  # noqa: C901
     """One channel's verdict, with the reason stated in the measurement's terms.
 
     Order matters: the first failing test is the one reported, so the reason is
@@ -80,6 +84,16 @@ def judge(measurement: dict) -> Verdict:
             WATCH,
             f"repeatable, but {subs:,} subs is above {REACHABLE_MAX_SUBS:,} - its "
             "numbers cannot be extrapolated to a new channel",
+        )
+    # A person narrating their own expertise, with an audience already assembled
+    # elsewhere, is not a template a pipeline can follow. This project picked a
+    # niche around exactly such a channel before checking (C-048).
+    if measurement.get("operator") == PERSONAL:
+        return verdict(
+            WATCH,
+            "repeatable and reachable, but it is a personal brand rather than a "
+            f"faceless operation ({measurement.get('operator_evidence', 'see check')}) "
+            "- its numbers may rest on the operator, not the format",
         )
     ratio = median / max(subs, 1)
     return verdict(
