@@ -1,7 +1,14 @@
 # contentforge — Design
 
 **Date:** 2026-07-26
-**Status:** Approved, pending implementation plan
+**Status:** Approved, pending implementation plan — **partially invalidated 2026-07-29**
+
+> **Check [claims-ledger.md](../../findings/claims-ledger.md) before acting on any
+> claim in this document.** Evidence gathered on 2026-07-29 refuted several premises
+> it was written on, including that asset polish drives views (C-011), that the
+> "Every X Explained" format carries value on its own (C-010), and every channel
+> ranking based on mean views-per-video (C-001). Sections not touched by those
+> claims still stand.
 
 ## 1. Goal
 

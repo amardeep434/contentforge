@@ -4,6 +4,13 @@ Evidence-grounded pipeline for faceless video content: niche research → source
 
 Status: **design phase**. See `docs/superpowers/specs/` for the current design.
 
+**Before acting on any research claim, read
+[`docs/findings/claims-ledger.md`](docs/findings/claims-ledger.md).** It carries the
+current status of every load-bearing claim — confirmed, hypothesis, refuted or
+withdrawn — with the sample size and what changed it. Several claims in the spec and
+the older findings documents have been refuted; the ledger is authoritative where
+they disagree.
+
 ## Principles
 
 1. **Provenance or nothing.** Every factual claim resolves to a source with a URL and retrieval timestamp. Stages that lose their inputs fail loudly and write nothing — there are no synthesised fallbacks anywhere in this codebase.

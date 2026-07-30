@@ -1,5 +1,14 @@
 # Plan 2 — Vertical Slice to a Published Video
 
+> **Awaiting rewrite, 2026-07-29.** Tasks 1–4 (LLM client, sourcing, script
+> generation, policy gate) are implemented and unaffected. Tasks 5–8 (voice,
+> visuals, render, publish) are **on hold**: the visuals task targets a
+> labelled-grid template that is now known to be the opening frame of a failing
+> channel, not a winning one (C-011, C-010). Read
+> [claims-ledger.md](../../findings/claims-ledger.md) and
+> [2026-07-29-watching-videos-and-median-scan.md](../../findings/2026-07-29-watching-videos-and-median-scan.md)
+> before resuming.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Publish three "how does X work" explainers, then read retention before making a fourth.
