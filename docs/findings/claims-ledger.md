@@ -586,3 +586,35 @@ after        9   111,040    0.9        56%
 The new video landed below 100,000 (hit-rate fell 62% → 56%) but the median moved
 less than 1.2% and skew stayed at ~1.0. This is a genuine forward test — the
 prediction was made before the video existed — and it did not regress.
+
+### C-038 · Threads research needs an opencli adapter or the official API
+**Status:** `REFUTED` · 2026-07-30
+
+Neither is needed for **reading**. Public Threads profiles *and* keyword search
+are both readable through Jina Reader with no login, no browser extension, and no
+adapter:
+
+```bash
+curl -s "https://r.jina.ai/https://www.threads.net/@HANDLE"
+curl -s "https://r.jina.ai/https://www.threads.net/search?q=QUERY&serp_type=default"
+```
+
+Returns post text, author handle, permalink, date and engagement counts. Jina
+Reader is agent-reach's `web` backend, which `doctor` reports as `ok`.
+
+*Context:* opencli has no Threads adapter among ~180, and its Instagram/Facebook
+adapters are currently non-functional anyway — `doctor` reports every
+login-backed platform as `warn`, cause: "OpenCLI installed, but no connected
+browser extension detected". One extension install would fix all of them at once.
+
+*Still requires the official Threads API:* **publishing**. Reading is not the
+blocker; posting is (`threads_basic`, plus `threads_keyword_search` for
+sanctioned search). The Meta app remains on the critical path for that reason
+alone.
+
+*Caveat on what the reading returns:* a search for "faceless youtube" surfaces
+exactly the evidence tier this project rejects — e.g. a post claiming "$3,084 in
+the last 28 days, 308K subscribers, 9 videos" with **no channel named**, so it
+cannot be verified with the 1-unit handle lookup that exists for precisely this
+purpose. Cheap access to unverifiable claims is not the same as evidence
+(C-028).
