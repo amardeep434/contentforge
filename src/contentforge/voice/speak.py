@@ -27,6 +27,13 @@ from contentforge.errors import MissingDataError
 
 DEFAULT_VOICE = "en-GB-RyanNeural"
 
+#: The exemplar narrates at ~142 words per minute, measured across 2,592 words
+#: of its Cezanne video. edge-tts at default rate runs ~162 wpm, so it is slowed
+#: to match. Pace is one of the few narration properties that can be measured
+#: rather than judged by ear.
+DEFAULT_RATE = "-12%"
+EXEMPLAR_WPM = 142
+
 #: edge-tts reports offsets and durations in 100ns ticks, as SSML does.
 TICKS_PER_SECOND = 10_000_000
 
@@ -60,6 +67,11 @@ class Narration:
     def length(self) -> timedelta:
         return timedelta(seconds=self.duration_s)
 
+    @property
+    def wpm(self) -> float:
+        """Speech rate, for comparison against the exemplar's 142."""
+        return words_per_minute(len(self.words), self.duration_s)
+
 
 def to_seconds(ticks: int) -> float:
     return ticks / TICKS_PER_SECOND
@@ -77,7 +89,15 @@ def strip_citations(text: str) -> str:
     return stripped
 
 
-def edge_runner(text: str, voice: str) -> tuple[bytes, list[dict]]:
+def words_per_minute(word_count: int, seconds: float) -> float:
+    if seconds <= 0:
+        raise MissingDataError("cannot compute a speech rate over zero seconds")
+    return word_count / seconds * 60
+
+
+def edge_runner(
+    text: str, voice: str, rate: str = DEFAULT_RATE
+) -> tuple[bytes, list[dict]]:
     """Stream one utterance from edge-tts, returning audio and boundary events."""
     import edge_tts
 
@@ -88,7 +108,9 @@ def edge_runner(text: str, voice: str) -> tuple[bytes, list[dict]]:
         # WordBoundary events at all. Word-level timings are requested
         # explicitly; sentence boundaries can be derived from them, not the
         # other way round.
-        communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
+        communicate = edge_tts.Communicate(
+            text, voice, rate=rate, boundary="WordBoundary"
+        )
         async for chunk in communicate.stream():
             if chunk.get("type") == "audio" and chunk.get("data"):
                 audio.extend(chunk["data"])
@@ -109,13 +131,14 @@ def synthesise(
     text: str,
     out_path: Path,
     voice: str = DEFAULT_VOICE,
-    runner: Callable[[str, str], tuple[bytes, list[dict]]] = edge_runner,
+    rate: str = DEFAULT_RATE,
+    runner: Callable[..., tuple[bytes, list[dict]]] = edge_runner,
     writer: Callable[[Path, bytes], Path] = _write,
 ) -> Narration:
     """Narrate `text` to `out_path`, returning audio plus word timings."""
     spoken = strip_citations(text)
     try:
-        audio, events = runner(spoken, voice)
+        audio, events = runner(spoken, voice, rate)
     except MissingDataError:
         raise
     except Exception as error:

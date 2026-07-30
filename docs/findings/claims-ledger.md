@@ -868,3 +868,27 @@ category naming Monet and is by someone else.
 - `ObjectName` carries spliced Wikidata markup —
   `At Petit-Gennevillierslabel QS:Lfr,"Au Petit-Gennevilliers"` — which would
   otherwise render on screen as a chapter title.
+
+### C-047 · Narration pace can be matched to the exemplar by measurement
+**Status:** `CONFIRMED` · 2026-07-30 · n=2,592 words
+
+Almost nothing about a voice is measurable without ears. Pace is the exception,
+and it was measurably wrong.
+
+```
+Art History Explained    142 wpm   (2,592 words across its Cezanne video)
+edge-tts, default rate   162 wpm   14% faster
+edge-tts, rate="-12%"    143 wpm
+```
+
+Speech rate is computed from caption timings, which are free and need no audio.
+`DEFAULT_RATE = "-12%"` is now the pipeline default and `Narration.wpm` exposes
+the figure so a drift is visible rather than inferred.
+
+*What remains unmeasurable here:* timbre, accent, warmth, whether a voice holds
+attention for twenty minutes. Those need a human listener, and the samples are
+in `data/samples/` beside a 45-second reference clip for comparison.
+
+*Not to be confused with a finding about retention.* Matching the exemplar's pace
+is a reasonable default, not evidence that 142 wpm performs better than 162. That
+would need our own data (C-028).

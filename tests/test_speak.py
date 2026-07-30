@@ -122,7 +122,7 @@ def test_non_word_events_are_ignored():
 # --- synthesis --------------------------------------------------------------
 
 def fake_runner(audio=b"ID3audio", boundaries=()):
-    def _runner(text, voice):
+    def _runner(text, voice, rate=None):
         return audio, list(boundaries)
 
     return _runner
@@ -131,7 +131,7 @@ def fake_runner(audio=b"ID3audio", boundaries=()):
 def test_the_narrator_never_receives_a_citation_marker():
     seen = {}
 
-    def _runner(text, voice):
+    def _runner(text, voice, rate=None):
         seen["text"] = text
         return b"ID3audio", [{"type": "WordBoundary", "offset": 0, "duration": 10, "text": "x"}]
 
@@ -147,7 +147,7 @@ def test_the_narrator_never_receives_a_citation_marker():
 def test_the_chosen_voice_is_passed_through():
     seen = {}
 
-    def _runner(text, voice):
+    def _runner(text, voice, rate=None):
         seen["voice"] = voice
         return b"ID3audio", [{"type": "WordBoundary", "offset": 0, "duration": 10, "text": "x"}]
 
@@ -185,7 +185,7 @@ def test_no_word_boundaries_raises():
 
 
 def test_a_runner_failure_becomes_missing_data():
-    def boom(text, voice):
+    def boom(text, voice, rate=None):
         raise OSError("websocket closed")
 
     with pytest.raises(MissingDataError):
@@ -210,3 +210,31 @@ def test_audio_is_written_and_the_path_returned(tmp_path):
 def test_narration_reports_a_readable_duration():
     narration = Narration(path=Path("/x"), duration_s=95.5, words=())
     assert narration.length == timedelta(seconds=95.5)
+
+
+def test_speech_rate_is_measurable_against_the_exemplar():
+    # The exemplar narrates at ~142 wpm, measured over 2,592 words. Pace is one
+    # of the few narration properties that can be measured rather than judged.
+    from contentforge.voice.speak import EXEMPLAR_WPM, words_per_minute
+
+    assert round(words_per_minute(142, 60)) == EXEMPLAR_WPM
+    assert round(words_per_minute(35, 12.94)) == 162
+
+
+def test_a_zero_length_narration_cannot_have_a_rate():
+    from contentforge.voice.speak import words_per_minute
+
+    with pytest.raises(MissingDataError):
+        words_per_minute(10, 0)
+
+
+def test_the_rate_is_passed_to_the_runner():
+    seen = {}
+
+    def _runner(text, voice, rate=None):
+        seen["rate"] = rate
+        return b"ID3audio", [{"type": "WordBoundary", "offset": 0, "duration": 10, "text": "x"}]
+
+    synthesise("Hello", Path("/tmp/x.mp3"), rate="-20%", runner=_runner,
+               writer=lambda p, d: p)
+    assert seen["rate"] == "-20%"

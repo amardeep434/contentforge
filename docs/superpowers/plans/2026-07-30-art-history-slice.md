@@ -121,7 +121,12 @@ Two things worth carrying into Task 3:
   estimated.
 - Output is 24 kHz mono at 48 kbps. That is edge-tts's fixed format and is fine
   for narration — YouTube re-encodes regardless — but it is not a knob that
-  exists if the audio is ever judged thin.
+  exists if the audio is ever judged thin. (The exemplar publishes 48 kHz
+  stereo, though YouTube's own re-encode makes the comparison less meaningful
+  than it looks.)
+- **Pace is matched to the exemplar by measurement** (C-047): 142 wpm across
+  2,592 words of its Cezanne video, against edge-tts's default 162. `-12%` lands
+  at 143. Everything else about the voice needs a human ear.
 
 ## Task 3: Visual composition
 
