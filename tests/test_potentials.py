@@ -39,10 +39,31 @@ def test_views_per_sub_is_computed():
     assert row.views_per_sub == 6.7
 
 
-def test_new_rows_start_as_candidates():
+def test_new_rows_carry_no_human_opinion():
     row = from_profile(profile(), DAY1)
-    assert row.status == "candidate"
+    assert row.status == ""
     assert row.first_seen == row.last_checked == "2026-07-30"
+
+
+def test_a_verdict_is_recorded_separately_from_human_status():
+    from contentforge.research.analytics import judge
+
+    verdict = judge({**profile(), "channel_id": "UC1"})
+    row = from_profile(profile(), DAY1, verdict=verdict)
+    assert row.verdict == "exemplar"
+    assert "views per subscriber" in row.verdict_reason
+    assert row.status == ""          # untouched by machinery
+    assert row.standing == "exemplar"
+
+
+def test_a_human_status_overrides_the_machine_verdict():
+    from dataclasses import replace
+    from contentforge.research.analytics import judge
+
+    row = from_profile(profile(), DAY1, verdict=judge({**profile(), "channel_id": "UC1"}))
+    overridden = replace(row, status="rejected", notes="reads scraped charts")
+    assert overridden.verdict == "exemplar"   # machine call preserved for audit
+    assert overridden.standing == "rejected"  # human wins
 
 
 def test_reachable_is_about_inferring_to_a_new_channel():
@@ -118,23 +139,34 @@ def test_missing_file_loads_as_empty(tmp_path):
     assert load_potentials(tmp_path / "nope.csv") == []
 
 
-def test_summary_highlights_reachable_and_repeatable():
+def test_summary_counts_by_verdict():
+    from contentforge.research.analytics import judge
+
     rows = [
-        from_profile(profile(channel_id="UC1", subs=16_700, median=112_000), DAY1),
-        from_profile(profile(channel_id="UC2", subs=1_030_000), DAY1),
-        from_profile(profile(channel_id="UC3", repeatable=False), DAY1),
+        from_profile(
+            profile(channel_id="UC1", subs=16_700, median=112_000),
+            DAY1,
+            verdict=judge({**profile(channel_id="UC1", subs=16_700), "n": 12}),
+        ),
+        from_profile(
+            profile(channel_id="UC2", subs=1_030_000),
+            DAY1,
+            verdict=judge(profile(channel_id="UC2", subs=1_030_000)),
+        ),
     ]
     text = summarise(rows)
-    assert "3 channels tracked" in text
-    assert "repeatable (skew<=3, hit>=40%, n>=8): 2" in text
-    assert "of those, reachable (<80k subs):      1" in text
+    assert "2 channels tracked, 2 judged" in text
+    assert "exemplar (repeatable and reachable): 1" in text
+    assert "watch (repeatable, too large):       1" in text
 
 
-def test_rejected_channels_are_excluded_from_the_summary():
+def test_a_human_rejection_removes_it_from_the_exemplar_list():
     from dataclasses import replace
+    from contentforge.research.analytics import judge
 
-    rows = [replace(from_profile(profile(), DAY1), status="rejected")]
-    assert "reachable and repeatable" not in summarise(rows)
+    row = from_profile(profile(), DAY1, verdict=judge({**profile(), "channel_id": "UC1"}))
+    assert "exemplars:" in summarise([row])
+    assert "exemplars:" not in summarise([replace(row, status="rejected")])
 
 
 def test_incoming_duplicates_collapse_to_one_row():
@@ -159,3 +191,25 @@ def test_a_missing_handle_is_not_printed_as_one():
     row = replace(from_profile(profile(), DAY1), handle="", title="Art History Explained")
     assert row.label == "Art History Explained"
     assert from_profile(profile(handle="brainosophic"), DAY1).label == "@brainosophic"
+
+
+def test_human_status_must_use_the_verdict_vocabulary():
+    # "watching" instead of "watch" silently dropped channels from every
+    # summary, because `standing` returned a value nothing counted.
+    import pytest
+
+    from contentforge.research.potentials import validate_status
+
+    assert validate_status("watch") == "watch"
+    assert validate_status("") == ""
+    with pytest.raises(ValueError):
+        validate_status("watching")
+    with pytest.raises(ValueError):
+        validate_status("rejected")
+
+
+def test_standing_and_verdict_share_one_vocabulary():
+    from contentforge.research.analytics import EXEMPLAR, REJECT, WATCH
+    from contentforge.research.potentials import VALID_STATUS
+
+    assert {EXEMPLAR, WATCH, REJECT} <= set(VALID_STATUS)

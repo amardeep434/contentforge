@@ -33,6 +33,9 @@ FIELDS = (
     "max_views",
     "repeatable",
     "views_per_sub",
+    "verdict",
+    "verdict_reason",
+    "criteria_version",
     "status",
     "notes",
     "source",
@@ -40,9 +43,24 @@ FIELDS = (
     "last_checked",
 )
 
-# What a fresh row gets. "candidate" means measured but not yet judged.
-DEFAULT_STATUS = "candidate"
-VALID_STATUS = ("candidate", "watching", "exemplar", "rejected")
+# `verdict` is written by analytics and refreshed on every run. `status` is the
+# human override and is never touched by machinery - empty means "no human has
+# an opinion". Conflating the two meant analytics could not record a decision
+# without destroying someone's note, which is why they are separate columns.
+NO_HUMAN_OPINION = ""
+#: A human override must use the *same vocabulary* as an analytics verdict, or
+#: `standing` returns a value nothing counts. Writing "watching" where the
+#: machine writes "watch" silently dropped 4 channels out of every summary.
+VALID_STATUS = ("", "exemplar", "watch", "reject")
+
+
+def validate_status(status: str) -> str:
+    if status not in VALID_STATUS:
+        raise ValueError(
+            f"status {status!r} is not one of {VALID_STATUS}; human overrides must "
+            "use the same vocabulary as analytics verdicts"
+        )
+    return status
 
 
 @dataclass(frozen=True)
@@ -60,11 +78,19 @@ class Potential:
     max_views: int
     repeatable: bool
     views_per_sub: float
+    verdict: str
+    verdict_reason: str
+    criteria_version: str
     status: str
     notes: str
     source: str
     first_seen: str
     last_checked: str
+
+    @property
+    def standing(self) -> str:
+        """The human's call if there is one, otherwise the machine's."""
+        return self.status or self.verdict
 
     @property
     def label(self) -> str:
@@ -86,8 +112,10 @@ class Potential:
         return self.subs < 80_000
 
 
-def from_profile(profile: dict, now: datetime, source: str = "") -> Potential:
-    """Build a row from a `leads.profile_views` result plus channel facts."""
+def from_profile(
+    profile: dict, now: datetime, source: str = "", verdict=None
+) -> Potential:
+    """Build a row from a measurement, optionally with an analytics verdict."""
     subs = max(int(profile["subs"]), 1)
     stamp = now.date().isoformat()
     return Potential(
@@ -104,7 +132,10 @@ def from_profile(profile: dict, now: datetime, source: str = "") -> Potential:
         max_views=int(profile["max"]),
         repeatable=bool(profile["repeatable"]),
         views_per_sub=round(int(profile["median"]) / subs, 2),
-        status=DEFAULT_STATUS,
+        verdict=verdict.status if verdict else "",
+        verdict_reason=verdict.reason if verdict else "",
+        criteria_version=verdict.criteria_version if verdict else "",
+        status=NO_HUMAN_OPINION,
         notes="",
         source=source,
         first_seen=stamp,
@@ -132,6 +163,9 @@ def load_potentials(path: Path) -> list[Potential]:
                 max_views=int(record["max_views"]),
                 repeatable=record["repeatable"] == "True",
                 views_per_sub=float(record["views_per_sub"]),
+                verdict=record.get("verdict", ""),
+                verdict_reason=record.get("verdict_reason", ""),
+                criteria_version=record.get("criteria_version", ""),
                 status=record["status"],
                 notes=record["notes"],
                 source=record["source"],
@@ -184,19 +218,23 @@ def save_potentials(path: Path, rows: list[Potential]) -> Path:
 
 
 def summarise(rows: list[Potential]) -> str:
-    repeatable = [r for r in rows if r.repeatable and r.status != "rejected"]
-    reachable = [r for r in repeatable if r.reachable]
+    judged = [r for r in rows if r.verdict]
+    exemplars = [r for r in judged if r.standing == "exemplar"]
+    watching = [r for r in judged if r.standing == "watch"]
     lines = [
-        f"{len(rows)} channels tracked",
-        f"  repeatable (skew<=3, hit>=40%, n>=8): {len(repeatable)}",
-        f"  of those, reachable (<80k subs):      {len(reachable)}",
+        f"{len(rows)} channels tracked, {len(judged)} judged",
+        f"  exemplar (repeatable and reachable): {len(exemplars)}",
+        f"  watch (repeatable, too large):       {len(watching)}",
+        f"  reject:                              "
+        f"{sum(1 for r in judged if r.standing == 'reject')}",
     ]
-    if reachable:
+    if exemplars:
         lines.append("")
-        lines.append("  reachable and repeatable:")
-        for row in sorted(reachable, key=lambda r: -r.views_per_sub):
+        lines.append("  exemplars:")
+        for row in sorted(exemplars, key=lambda r: -r.views_per_sub):
             lines.append(
                 f"    {row.label:<26} {row.subs:>8,} subs  "
                 f"median {row.median:>9,}  {row.views_per_sub:>5.1f} views/sub"
             )
+            lines.append(f"      {row.verdict_reason}")
     return "\n".join(lines)

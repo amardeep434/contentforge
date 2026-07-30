@@ -8,6 +8,8 @@ Credentials come only from the environment and are never logged.
 """
 
 import argparse
+import json
+from dataclasses import asdict
 import os
 import re
 from datetime import datetime, timezone
@@ -236,16 +238,24 @@ def main(argv: list[str] | None = None) -> int:
         "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
     )
 
-    leads_verify = subparsers.add_parser(
-        "leads-verify",
-        help="stage 2: resolve and profile every named channel (~2 units each)",
+    resolve = subparsers.add_parser(
+        "leads-resolve",
+        help="stage 3: resolve named handles to measurements (~2 units each). "
+             "No judgement - it only measures.",
     )
-    leads_verify.add_argument("run_dir", type=Path)
-    leads_verify.add_argument(
-        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
-    )
-    leads_verify.add_argument(
+    resolve.add_argument("run_dir", type=Path)
+    resolve.add_argument(
         "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+
+    analyse = subparsers.add_parser(
+        "leads-analyse",
+        help="stage 4: judge stored measurements and promote them. Pure - costs "
+             "no quota, so criteria can change and be re-run freely.",
+    )
+    analyse.add_argument("run_dir", type=Path)
+    analyse.add_argument(
+        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
     )
 
     seen_cmd = subparsers.add_parser(
@@ -412,11 +422,66 @@ def main(argv: list[str] | None = None) -> int:
             print(f"                   {reading.detail}")
         return 0
 
-    if args.command == "leads-verify":
-        from contentforge.research.leads import (
-            load_leads,
-            profile_views,
-            write_report,
+    if args.command == "leads-analyse":
+        from contentforge.research.analytics import judge_all, tally
+        from contentforge.research.leads import load_leads, write_report
+        from contentforge.research.potentials import (
+            from_profile,
+            load_potentials,
+            save_potentials,
+            summarise,
+            upsert,
+        )
+
+        path = args.run_dir / "measurements.json"
+        if not path.exists():
+            raise MissingDataError(
+                f"no measurements at {path}; run `pipeline leads-resolve "
+                f"{args.run_dir}` first"
+            )
+        measurements = json.loads(path.read_text())["measurements"]
+        query, gathered = load_leads(args.run_dir)
+        now = datetime.now(timezone.utc)
+
+        verdicts = judge_all(measurements)
+        by_id = {verdict.channel_id: verdict for verdict in verdicts}
+        (args.run_dir / "verdicts.json").write_text(
+            json.dumps([asdict(v) for v in verdicts], indent=2)
+        )
+
+        for measurement in measurements:
+            verdict = by_id[measurement["channel_id"]]
+            print(f"  {verdict.status:<9} @{measurement['handle']}")
+            print(f"            {verdict.reason}")
+
+        existing = load_potentials(args.potentials)
+        merged = upsert(
+            existing,
+            [
+                from_profile(
+                    m, now, source=m.get("permalink", ""), verdict=by_id[m["channel_id"]]
+                )
+                for m in measurements
+            ],
+        )
+        save_potentials(args.potentials, merged)
+        write_report(measurements, gathered, args.run_dir, query)
+
+        counts = tally(verdicts)
+        print(f"\n{counts}")
+        print(f"Potentials: {args.potentials} (+{len(merged) - len(existing)} new)")
+        print(summarise(merged))
+        return 0
+
+    if args.command == "leads-resolve":
+        from contentforge.research.leads import load_leads, profile_views
+        from contentforge.research.seen import (
+            LOOKUP_FAILED,
+            NO_CHANNEL,
+            VERIFIED,
+            load_seen,
+            mark,
+            save_seen,
         )
 
         query, gathered = load_leads(args.run_dir)
@@ -424,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
         now = datetime.now(timezone.utc)
         ledger = load_ledger(ledger_path, now)
         started = ledger.spent
-        rows = []
+        measurements = []
         for lead in gathered:
             for handle in lead.all_handles:
                 try:
@@ -440,75 +505,50 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  @{handle}: {str(error)[:90]}")
                     continue
                 long_form = [
-                    v.view_count.value
-                    for v in videos
-                    if v.duration_seconds.value >= 120
+                    v.view_count.value for v in videos if v.duration_seconds.value >= 120
                 ]
                 if not long_form:
                     print(f"  @{handle}: no long-form videos")
                     continue
-                profile = profile_views(long_form)
-                profile.update(
+                record = profile_views(long_form)
+                record.update(
+                    channel_id=facts.channel_id,
                     handle=handle,
+                    title=facts.title,
                     subs=facts.subscribers.value,
                     permalink=lead.permalink,
-                    channel_id=facts.channel_id,
-                    title=facts.title,
                 )
-                rows.append(profile)
-                mark = "REPEATABLE" if profile["repeatable"] else ""
+                measurements.append(record)
                 print(
                     f"  @{handle}: {facts.subscribers.value:,} subs, "
-                    f"median {profile['median']:,}, skew {profile['skew']} {mark}"
+                    f"median {record['median']:,}, skew {record['skew']}"
                 )
         save_ledger(ledger_path, ledger, now, started)
-        report = write_report(rows, gathered, args.run_dir, query)
-
-        # Verified channels outlive the run that found them.
-        from contentforge.research.potentials import (
-            from_profile,
-            load_potentials,
-            save_potentials,
-            summarise,
-            upsert,
-        )
-
-        from contentforge.research.seen import (
-            LOOKUP_FAILED,
-            NO_CHANNEL,
-            VERIFIED,
-            load_seen,
-            mark,
-            save_seen,
+        (args.run_dir / "measurements.json").write_text(
+            json.dumps(
+                {"query": query, "resolved_at": now.isoformat(),
+                 "measurements": measurements},
+                indent=2,
+            )
         )
 
         seen_rows = load_seen(args.seen)
-        verified_links = {row["permalink"] for row in rows}
+        resolved = {m["permalink"] for m in measurements}
         for lead in gathered:
-            if lead.permalink in verified_links:
+            if lead.permalink in resolved:
                 handles = " ".join(
-                    r["handle"] for r in rows if r["permalink"] == lead.permalink
+                    m["handle"] for m in measurements if m["permalink"] == lead.permalink
                 )
                 seen_rows = mark(seen_rows, lead.permalink, VERIFIED, handles)
             elif lead.all_handles:
-                # named something, but nothing resolved
                 seen_rows = mark(seen_rows, lead.permalink, LOOKUP_FAILED)
-            elif lead.handles_from_images == () and lead.image_paths:
-                pass  # screenshots still unread; leave it open
-            else:
+            elif lead.handles_from_images or not lead.image_paths:
                 seen_rows = mark(seen_rows, lead.permalink, NO_CHANNEL)
         save_seen(args.seen, seen_rows)
 
-        existing = load_potentials(args.potentials)
-        merged = upsert(
-            existing,
-            [from_profile(row, now, source=row["permalink"]) for row in rows],
-        )
-        save_potentials(args.potentials, merged)
-        print(f"\nPotentials: {args.potentials} (+{len(merged) - len(existing)} new)")
-        print(summarise(merged))
-        print(f"\n{len(rows)} channels profiled. Report: {report}")
-        print(f"Quota spent this run: {ledger.spent - started}")
+        print(f"\n{len(measurements)} measurements -> {args.run_dir / 'measurements.json'}")
+        print(f"Quota spent: {ledger.spent - started}")
+        print(f"Next: pipeline leads-analyse {args.run_dir}   (free, re-runnable)")
         return 0
 
     if args.command == "verify":

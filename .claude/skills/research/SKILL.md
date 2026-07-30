@@ -73,22 +73,42 @@ nothing*, so record both. Stage 3 writes the distinction into `leads-seen.csv`,
 and an outcome only ever moves forward — a later run cannot downgrade a post you
 already resolved back to unread.
 
-## 3. Verify — ~2 quota units per channel
+## 3. Resolve — ~2 quota units per channel, no judgement
 
 ```bash
-pipeline leads-verify data/leads/<run>
+pipeline leads-resolve data/leads/<run>
 ```
 
 Resolves each handle with `channels.list` (1 unit, exact) — **never** search
-(100 units, returns a guess). Profiles on **median, skew and hit-rate**; mean
-overstates the median by >2x on 58% of channels (C-001).
+(100 units, returns a guess). Measures median, skew and hit-rate; mean overstates
+the median by >2x on 58% of channels (C-001). Writes `measurements.json`.
 
-Then it files every verified channel into `docs/evidence/potentials.csv`
-automatically and prints the summary.
+This step only *measures*. It decides nothing.
 
-> **Sanity-check each profile against its screenshot.** If the screenshot showed
-> a 1.3M-view video and the API reports a 342-view median, the handle is wrong,
-> not the channel. Discard the row.
+## 3b. Analyse — free, re-runnable
+
+```bash
+pipeline leads-analyse data/leads/<run>
+```
+
+Judges the stored measurements against explicit criteria and writes a **reason**
+per channel, then promotes everything into `potentials.csv`.
+
+It is separated from resolve because it is pure. Criteria have changed four
+times in this project — mean, then median, then hit-rate, then reachability —
+and each change previously forced a rescan at ~2 units per channel. Judging
+stored measurements means **re-deciding costs nothing**. Every verdict records
+its `criteria_version`, so rows judged under an older ruleset are identifiable.
+
+```
+exemplar   repeatable and under 80k subs — its numbers mean something for us
+watch      repeatable but too large to extrapolate from
+reject     too few videos, lottery-shaped, or hit-rate too low
+```
+
+> **Sanity-check each measurement against its screenshot.** If the screenshot
+> showed a 1.3M-view video and the API reports a 342-view median, the handle is
+> wrong, not the channel. Discard the row.
 
 ## 4. Record in the ledger — the part that makes it durable
 
@@ -121,11 +141,26 @@ API, say so.
 ## Where things end up
 
 ```
-data/leads/<run>/           gitignored   screenshots, per-run report
-docs/evidence/leads-seen.csv  committed   every post + what became of it
-docs/evidence/potentials.csv  committed   every channel that verified
-docs/findings/claims-ledger.md committed  what we now believe, and why
+research   query                → posts + screenshots        free
+  ↓ read screenshots (vision)
+leads      leads.json           → posts + handles            free
+  ↓ leads-resolve
+measure    measurements.json    → facts + view stats         ~2 units/channel
+  ↓ leads-analyse
+verdicts   verdicts.json        → status + reason            free, re-runnable
+  ↓
+potentials potentials.csv       → curated, with the why      committed
 ```
+
+```
+data/leads/<run>/              gitignored   screenshots, measurements, verdicts
+docs/evidence/leads-seen.csv   committed    every post + what became of it
+docs/evidence/potentials.csv   committed    every channel measured, with a verdict
+docs/findings/claims-ledger.md committed    what we now believe, and why
+```
+
+Each stage reads one thing and writes another, per the spec's filesystem-stage
+architecture. Any stage can be re-run without repeating the ones before it.
 
 Nothing that cost effort lives only in the gitignored directory.
 
@@ -139,13 +174,17 @@ pipeline potentials            # summary
 pipeline potentials --all      # every row
 ```
 
-Statuses: `candidate` (measured, unjudged) → `watching` / `exemplar` /
-`rejected`. Set `status` and `notes` by hand; **a refresh preserves them** while
-updating the measurements, so judgement is never overwritten.
+Two separate columns, deliberately:
 
-`repeatable` = skew ≤3, hit-rate ≥40%, n ≥8. Only ~5% qualify (C-020).
-`reachable` = under 80k subs, i.e. small enough that its numbers say something
-about a channel starting from zero.
+- `verdict` / `verdict_reason` / `criteria_version` — written by analytics,
+  refreshed every run.
+- `status` / `notes` — the human override, never touched by machinery. Empty
+  means nobody has an opinion.
+
+`standing` is the human call if there is one, else the machine's. **Both must use
+the same vocabulary** (`exemplar` / `watch` / `reject`); writing "watching" where
+the machine writes "watch" silently dropped four channels out of every summary,
+so `validate_status` now rejects it.
 
 ## What this loop cannot answer
 
