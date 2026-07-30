@@ -232,6 +232,9 @@ def main(argv: list[str] | None = None) -> int:
              "actually lives (slow: one rendered fetch per post)",
     )
     leads.add_argument("--out", type=Path, default=None)
+    leads.add_argument(
+        "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
 
     leads_verify = subparsers.add_parser(
         "leads-verify",
@@ -240,6 +243,19 @@ def main(argv: list[str] | None = None) -> int:
     leads_verify.add_argument("run_dir", type=Path)
     leads_verify.add_argument(
         "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+    leads_verify.add_argument(
+        "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+
+    seen_cmd = subparsers.add_parser(
+        "seen", help="what happened to every lead, across all runs"
+    )
+    seen_cmd.add_argument(
+        "--path", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+    seen_cmd.add_argument(
+        "--todo", action="store_true", help="list posts whose screenshots are unread"
     )
 
     pots = subparsers.add_parser(
@@ -263,6 +279,21 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "seen":
+        from contentforge.research.seen import load_seen, summarise_seen, unsettled
+
+        rows = load_seen(args.path)
+        if not rows:
+            print(f"nothing seen yet at {args.path}")
+            return 0
+        print(summarise_seen(rows))
+        if args.todo:
+            print("\nscreenshots still unread:")
+            for row in unsettled(rows):
+                print(f"  @{row.author:<20} {row.claim[:70]}")
+                print(f"    {row.permalink}")
+        return 0
 
     if args.command == "potentials":
         from contentforge.research.potentials import load_potentials, summarise
@@ -310,6 +341,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  handles found in captions: {named}")
         print(f"  screenshots downloaded:    {shots}")
         print(f"  reply-step screenshots:    {steps}")
+
+        # Leads outlive their run directory: the run is gitignored, this is not.
+        from contentforge.research.seen import (
+            from_lead,
+            load_seen,
+            save_seen,
+            summarise_seen,
+            unsettled,
+            upsert_seen,
+        )
+
+        before = load_seen(args.seen)
+        settled_links = {row.permalink for row in before if row.settled}
+        already = sum(1 for lead in gathered if lead.permalink in settled_links)
+        after = upsert_seen(before, [from_lead(lead, now) for lead in gathered])
+        save_seen(args.seen, after)
+        print(f"  already settled in earlier runs: {already}")
+        print(f"  still needing a read:            {len(unsettled(after))}")
+        print()
+        print(summarise_seen(after))
         print(
             "\nNext: read the screenshots in "
             f"{run_dir / 'images'} and record any channel names with\n"
@@ -421,6 +472,32 @@ def main(argv: list[str] | None = None) -> int:
             summarise,
             upsert,
         )
+
+        from contentforge.research.seen import (
+            LOOKUP_FAILED,
+            NO_CHANNEL,
+            VERIFIED,
+            load_seen,
+            mark,
+            save_seen,
+        )
+
+        seen_rows = load_seen(args.seen)
+        verified_links = {row["permalink"] for row in rows}
+        for lead in gathered:
+            if lead.permalink in verified_links:
+                handles = " ".join(
+                    r["handle"] for r in rows if r["permalink"] == lead.permalink
+                )
+                seen_rows = mark(seen_rows, lead.permalink, VERIFIED, handles)
+            elif lead.all_handles:
+                # named something, but nothing resolved
+                seen_rows = mark(seen_rows, lead.permalink, LOOKUP_FAILED)
+            elif lead.handles_from_images == () and lead.image_paths:
+                pass  # screenshots still unread; leave it open
+            else:
+                seen_rows = mark(seen_rows, lead.permalink, NO_CHANNEL)
+        save_seen(args.seen, seen_rows)
 
         existing = load_potentials(args.potentials)
         merged = upsert(

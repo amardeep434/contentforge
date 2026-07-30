@@ -30,12 +30,21 @@ Good queries: `faceless youtube`, `youtube automation`, `channel spotted`,
 `<niche> youtube`. `CHANNEL SPOTTED` posts are the richest vein — they name a
 small channel with its niche and format.
 
-Writes `data/leads/<date>-<query>/` (gitignored; regenerable).
+Writes `data/leads/<date>-<query>/` — gitignored and regenerable. The *durable*
+record is `docs/evidence/leads-seen.csv`, updated automatically: it remembers
+which posts were already read so a re-run does not ask you to read the same
+screenshots twice, and it keeps the uncheckable-claim denominator that survives
+the run directory being deleted.
+
+```bash
+pipeline seen           # what happened to every lead, all runs
+pipeline seen --todo    # posts whose screenshots are still unread
+```
 
 ## 2. Read the screenshots — needs eyes
 
-Read **every** file in `<run>/images/`. Files ending `_replyN` are walkthrough
-steps. What to pull out:
+Read **every** file in `<run>/images/` — or run `pipeline seen --todo` and read
+only the posts not yet settled. Files ending `_replyN` are walkthrough steps. What to pull out:
 
 - **`@handle`** — the point. Usually in a channel-page header.
 - **subs / video count** — to compare against the caption's claim.
@@ -60,7 +69,9 @@ add_image_handles(Path("data/leads/<run>"), {
 ```
 
 Empty means *not yet read*; that is deliberately different from *read, found
-nothing*, so record both.
+nothing*, so record both. Stage 3 writes the distinction into `leads-seen.csv`,
+and an outcome only ever moves forward — a later run cannot downgrade a post you
+already resolved back to unread.
 
 ## 3. Verify — ~2 quota units per channel
 
@@ -106,6 +117,17 @@ claim as a measurement. If a number came from a screenshot rather than the
 API, say so.
 
 ---
+
+## Where things end up
+
+```
+data/leads/<run>/           gitignored   screenshots, per-run report
+docs/evidence/leads-seen.csv  committed   every post + what became of it
+docs/evidence/potentials.csv  committed   every channel that verified
+docs/findings/claims-ledger.md committed  what we now believe, and why
+```
+
+Nothing that cost effort lives only in the gitignored directory.
 
 ## The potentials list
 
