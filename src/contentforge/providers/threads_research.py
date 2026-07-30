@@ -8,10 +8,15 @@ renders both public profiles and keyword search to markdown, unauthenticated.
 Publishing still requires the official Threads API. Reading was never the
 blocker.
 
-**What this returns is claims, not evidence.** Searching this platform for
-earnings figures surfaces posts like "made $3,084 in 28 days, 308K subscribers"
-with no channel named - unverifiable by construction. Treat every number here as
-an assertion by a stranger until it is checked against the source API.
+**What this returns is claims, not evidence** - but many of them are checkable.
+The channel under discussion is usually named in an attached screenshot rather
+than the caption, so `images` is part of the record and reading it is how a
+claim becomes a lead. Two claims found this way verified exactly against the
+Data API at 1 unit each; a first pass that ignored the images concluded, wrongly,
+that none of them could be checked.
+
+Treat every number here as an assertion by a stranger until `pipeline verify`
+says otherwise.
 """
 
 import re
@@ -33,6 +38,10 @@ _PERMALINK = re.compile(
     r"\[([^\]]+)\]\((https://www\.threads\.(?:net|com)/@([\w.]+)/post/[\w-]+)\)"
 )
 _COUNT_ONLY = re.compile(r"^[\d,.]+[KM]?$")
+# Posts carry screenshots - YouTube Studio panels, channel pages - and the
+# channel being discussed is usually named only there, never in the caption.
+# Dropping these makes a checkable claim look uncheckable.
+_IMAGE = re.compile(r"!\[Image[^\]]*\]\((https://scontent[^)]+)\)")
 # Whole links, plus the orphan "](url)" tail Jina leaves when it splits a
 # markdown link across two lines.
 _MARKDOWN_NOISE = re.compile(r"!?\[[^\]]*\]\([^)]*\)|\]\([^)]*\)")
@@ -55,6 +64,7 @@ class ThreadsPost:
     permalink: str
     posted_on: str
     text: str
+    images: tuple[str, ...]
     source_url: str
     retrieved_at: datetime
 
@@ -105,7 +115,9 @@ def parse_posts(markdown: str, source_url: str, now: datetime) -> list[ThreadsPo
     for position, (index, match) in enumerate(anchors):
         stop = anchors[position + 1][0] if position + 1 < len(anchors) else len(lines)
         body: list[str] = []
+        images: list[str] = []
         for raw in lines[index + 1 : stop]:
+            images.extend(_IMAGE.findall(raw))
             text = _clean(raw)
             if text.startswith(_LOGIN_WALL):
                 break
@@ -119,6 +131,7 @@ def parse_posts(markdown: str, source_url: str, now: datetime) -> list[ThreadsPo
                 permalink=match.group(2),
                 posted_on=match.group(1),
                 text=" ".join(body).strip(),
+                images=tuple(dict.fromkeys(images)),
                 source_url=source_url,
                 retrieved_at=now,
             )

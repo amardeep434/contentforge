@@ -161,3 +161,36 @@ def test_login_wall_is_not_treated_as_post_content():
     posts = parse_posts(LEAKY, "https://x", NOW)
     assert posts[-1].text == "don't fear the edit."
     assert "Log in" not in posts[-1].text
+
+
+WITH_IMAGE = """Markdown Content:
+[onlinemoneyai1](https://www.threads.net/@onlinemoneyai1)
+
+[04/25/25](https://www.threads.net/@onlinemoneyai1/post/DI4jWJoyuNT)
+
+Made $3,084 in 28 days.
+
+[![Image 2](https://scontent-sea5-1.cdninstagram.com/v/t51.75761-15/shot.jpg?stp=x)](https://www.threads.net/@onlinemoneyai1/post/DI4jWJoyuNT)
+
+143
+"""
+
+
+def test_post_images_are_captured():
+    # The channel name is routinely inside a Studio screenshot rather than the
+    # caption, so a text-only record makes a verifiable claim look unverifiable.
+    posts = parse_posts(WITH_IMAGE, "https://x", NOW)
+    assert posts[0].images == (
+        "https://scontent-sea5-1.cdninstagram.com/v/t51.75761-15/shot.jpg?stp=x",
+    )
+
+
+def test_image_urls_do_not_leak_into_text():
+    posts = parse_posts(WITH_IMAGE, "https://x", NOW)
+    assert posts[0].text == "Made $3,084 in 28 days."
+    assert "cdninstagram" not in posts[0].text
+
+
+def test_posts_without_images_get_an_empty_tuple():
+    posts = parse_posts(SAMPLE, "https://x", NOW)
+    assert posts[0].images == ()

@@ -620,7 +620,37 @@ purpose. Cheap access to unverifiable claims is not the same as evidence
 (C-028).
 
 ### C-039 · Threads earnings claims are verifiable leads worth researching
-**Status:** `REFUTED` · 2026-07-30 · n=20 posts, 9 monetary claims
+**Status:** `CONFIRMED` · 2026-07-30 · corrected same day; 2 of 2 attempted checks verified
+
+> **This row was first recorded as REFUTED and that was wrong.** The measurement
+> below counted only post *text*. These posts attach screenshots - YouTube Studio
+> panels, channel pages - and the channel is routinely named there and nowhere
+> else. Measuring the captions and concluding "unverifiable" measured my own
+> parser, not the platform.
+
+Reading the attached images instead:
+
+```
+@someunfilteredguy   claimed "308K subscribers, 9 videos"
+                     API: 336,000 subs, 10 videos, 651d
+                     median 338,062  mean 1,083,783  skew 3.2      VERIFIED
+@eonatlas            named in a "CHANNEL SPOTTED" post, niche 4K travel docs
+                     API: 2,730 subs, 14 videos, 58d
+                     median 15,194  mean 40,363  skew 2.7          VERIFIED
+```
+
+Both matched, allowing for growth since posting. Cost: 8 quota units total.
+
+A whole genre of post exists for this - "CHANNEL SPOTTED", naming a small channel
+with its niche and format - inside a 190K-member Threads community. That is a
+lead source, and the 1-unit handle lookup turns a lead into a fact.
+
+*Note the same mean/median trap in the wild:* the `@eonatlas` post advertised
+"24.7K+ avg views". The mean is now 40,363 and the median 15,194 (C-001).
+
+*Original text-only measurement, retained:* of 20 posts matching "faceless
+youtube", 9 made a specific monetary claim and none named a channel **in the
+caption**.
 
 Searching "faceless youtube" returned 20 posts, 9 of them making a specific
 monetary claim. **Zero named a channel.**
@@ -648,3 +678,43 @@ verified for 1 unit — and 0 of 9 qualified.
 ("my first $10", "first 10 subscribers", "drop your channels below"), not a
 strategy source. It is a plausible market for the client-services line mentioned
 in the spec's revenue model, and nothing else.
+
+### C-040 · Faceless-channel RPM is around $4, not the $5–25 in the niche table
+**Status:** `HYPOTHESIS` · 2026-07-30 · n=2 self-reported screenshots
+
+Two independent YouTube Studio screenshots found on Threads give a directly
+computable RPM:
+
+```
+@wannercashcow   $116,900.74 over 29,812,205 views (365d)   = $3.92 per 1,000
+@onlinemoneyai1  $3,084 over 784,928 views (28d)            = $3.93 per 1,000
+```
+
+Two unrelated posters landing within a cent of each other is notable. Both sit
+**below** every US figure in `data/niches.csv` — history $5–12, tech $15–25 —
+which are themselves marketing-blog sourced and already flagged as untrustworthy
+(C-034).
+
+*Why this is a hypothesis and not a finding:* screenshots can be fabricated,
+neither names its niche or audience geography, and revenue mix (Shorts vs
+long-form) is invisible. But it is the first RPM evidence in this project that
+derives from a number someone actually saw in Studio rather than a blog estimate.
+
+*Consequence if true:* the ~$200/video expectation set in the niche
+recommendation is roughly halved, to ~$100 at Narrative Art History's ~26,000
+median. Real RPM remains knowable only from our own Studio data.
+
+### C-041 · The winning visual style keeps showing up as crude line art
+**Status:** `HYPOTHESIS` · 2026-07-30 · n=3 channels, converging from separate searches
+
+`@someunfilteredguy` — 336,000 subscribers, median 338,062, **10 videos in 651
+days** — runs white stick figures on black with bold captions carrying one
+coloured word ("kill **excuses**", "non-**awkward**", "learn **3x** faster").
+
+That is the third independent arrival at the same aesthetic: Bluntly Explained's
+crude doodles beating its own polished space art by 57x (C-011), Brainosophy's
+line art, and now this. All three are cheap to produce and none is polished.
+
+*Still a hypothesis:* three channels found by different routes is suggestive,
+not a controlled comparison, and C-011 is the only one where production was held
+constant. Do not treat as established — that is the C-004/C-014 error.
