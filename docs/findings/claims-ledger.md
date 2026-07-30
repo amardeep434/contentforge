@@ -751,3 +751,33 @@ measured evidence available contradicts by a factor of 3 or more.
 *It also explains the ecosystem:* these posts circulate LLM estimates as fact,
 other posts cite those posts, and nothing in the chain is ever checked against
 the API — which costs 1 unit.
+
+### C-043 · Reddit is a better research source than Threads
+**Status:** `CONFIRMED` · 2026-07-30 · n=15 posts, first run
+
+Three structural advantages, all verified on a live run:
+
+- **`selftext` is the whole post.** No login wall, no teaser-plus-reply-images
+  split. Threads needed a JS-rendered second fetch per post to recover the
+  content (C-038 route); Reddit returns it in one call.
+- **`score` and comment count** give a quality signal Threads does not expose.
+  Expansion ranking now uses it where present.
+- **Subreddits are topic-scoped**, so r/aitubers beats a keyword search for
+  precision.
+
+*The two are complementary, not redundant.* A 15-post r/aitubers run contained
+**zero dollar figures**; Threads' "faceless youtube" run had 13 monetary claims
+in 20 posts. Reddit carries advice and workflows, Threads carries earnings
+flexes with Studio screenshots. Both are worth gathering.
+
+*Independent corroboration worth noting:* a 1000+ video creator's r/aitubers
+writeup arrives at four of this ledger's conclusions without knowing them —
+look for sub-1000-sub channels with outsized views (our `reachable` test), copy
+the title format but not the content (C-010), every niche has its own visual
+language (C-027), and "don't try to build a Pixar movie… simple slideshows work
+better than flashy effects" (C-011).
+
+*Requires:* the OpenCLI Chrome extension and a running daemon. Note that
+`agent-reach doctor` reports these platforms as `warn` even when the bridge is
+connected, because it deliberately never runs a platform command to verify a
+login. `warn` is not a fault.

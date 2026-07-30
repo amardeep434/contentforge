@@ -227,7 +227,13 @@ def main(argv: list[str] | None = None) -> int:
         help="stage 1: gather Threads claims + screenshots for a query (no quota)",
     )
     leads.add_argument("query")
-    leads.add_argument("--tags", action="store_true")
+    leads.add_argument(
+        "--source", choices=("threads", "reddit"), default="threads",
+        help="reddit carries the full post body and an engagement score; "
+             "threads hides its detail in reply screenshots",
+    )
+    leads.add_argument("--subreddit", default="", help="reddit only, e.g. aitubers")
+    leads.add_argument("--tags", action="store_true", help="threads only: tag feed")
     leads.add_argument(
         "--expand", action="store_true",
         help="also pull the author's reply screenshots, where the step-by-step "
@@ -329,17 +335,30 @@ def main(argv: list[str] | None = None) -> int:
 
         now = datetime.now(timezone.utc)
         run_dir = args.out or Path("data/leads") / (
-            f"{now:%Y-%m-%d}-{re.sub(r'[^a-z0-9]+', '-', args.query.lower()).strip('-')}"
+            f"{now:%Y-%m-%d}-{args.source}-"
+            f"{re.sub(r'[^a-z0-9]+', '-', args.query.lower()).strip('-')}"
         )
         expander = None
-        if args.expand:
-            from contentforge.providers.threads_research import read_thread
+        if args.source == "reddit":
+            from contentforge.providers.reddit_research import search_reddit
 
-            expander = read_thread
+            def searcher(query, serp_type=""):
+                return search_reddit(query, subreddit=args.subreddit)
+
+            # Reddit's selftext is the whole post; there is nothing to expand.
+            if args.expand:
+                print("note: --expand does nothing for reddit (selftext is complete)")
+        else:
+            searcher = search_threads
+            if args.expand:
+                from contentforge.providers.threads_research import read_thread
+
+                expander = read_thread
+
         gathered = gather_leads(
             args.query,
             run_dir,
-            search=search_threads,
+            search=searcher,
             serp_type="tags" if args.tags else "default",
             expand=expander,
         )
@@ -375,7 +394,8 @@ def main(argv: list[str] | None = None) -> int:
             "\nNext: read the screenshots in "
             f"{run_dir / 'images'} and record any channel names with\n"
             "  add_image_handles(run_dir, {permalink: [handles]})\n"
-            f"then run: pipeline leads-verify {run_dir}"
+            f"then: pipeline leads-resolve {run_dir}   (API)\n"
+            f"then: pipeline leads-analyse {run_dir}   (free)"
         )
         return 0
 

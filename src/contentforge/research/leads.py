@@ -106,10 +106,15 @@ def gather_leads(
     posts = search(query, serp_type=serp_type)
     leads: list[Lead] = []
     # Expanding costs a slow rendered fetch each, so it is bounded and spent on
-    # the posts most likely to carry a worked example.
+    # the posts most likely to carry a worked example. Reddit posts carry their
+    # full body already and expose a score, so rank on engagement where it
+    # exists and fall back to how many figures the text quotes.
     worth_expanding = {
         p.permalink
-        for p in sorted(posts, key=lambda p: -len(money_in(p.text)))[:max_expand]
+        for p in sorted(
+            posts,
+            key=lambda p: (-getattr(p, "score", 0), -len(money_in(p.text))),
+        )[:max_expand]
     }
     for index, post in enumerate(posts, start=1):
         paths: list[str] = []
