@@ -725,3 +725,29 @@ line art, and now this. All three are cheap to produce and none is polished.
 *Still a hypothesis:* three channels found by different routes is suggestive,
 not a controlled comparison, and C-011 is the only one where production was held
 constant. Do not treat as established — that is the C-004/C-014 error.
+
+### C-042 · The prevailing "guru" method is to ask an LLM for niche RPMs
+**Status:** `CONFIRMED` · 2026-07-30 · n=1 fully expanded walkthrough
+
+Expanding the "$6,000 in 30 days with Claude" thread recovers its steps, which
+are posted as reply images. Step one reads: *"First, ask Claude to give you
+high-paying YouTube niches. Align that prompt to how much you want to earn (e.g.
+$10k/mo)."* The attached screenshot shows the model returning:
+
+```
+01  Personal finance / wealth building   RPM $12-30   ~80k-150k views/mo
+02  Real estate investing                RPM $15-35   ~60k-100k views/mo
+```
+
+Those RPM figures are **model output, not measurement** — the same class of
+unsourced estimate as the marketing-blog table in `data/niches.csv` (C-034), and
+they sit 3-8x above the $3.92 computed from actual Studio screenshots (C-040).
+
+*Why this matters:* the widely-shared method is exactly the assumption-driven
+research this project spent a week refuting. It produces confident numbers with
+no provenance, and anyone following it plans against an RPM that the only
+measured evidence available contradicts by a factor of 3 or more.
+
+*It also explains the ecosystem:* these posts circulate LLM estimates as fact,
+other posts cite those posts, and nothing in the chain is ever checked against
+the API — which costs 1 unit.

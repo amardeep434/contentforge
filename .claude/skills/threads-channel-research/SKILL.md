@@ -18,9 +18,19 @@ images, the first two attempted checks both verified. See C-039 in
 ## Step 1 — gather (free, no quota)
 
 ```bash
-pipeline leads "faceless youtube"
-pipeline leads "youtubecreators" --tags     # tag feed / community
+pipeline leads "faceless youtube" --expand
+pipeline leads "youtubecreators" --tags --expand   # tag feed / community
 ```
+
+**Always pass `--expand`.** On Threads the top-level post is a teaser — it ends
+on "here's how I did it:" and every actual step is a *reply*, posted as an image.
+Without expansion you collect headlines and throw away the article. On the first
+real run, expansion recovered 17 step screenshots against 18 top-level ones:
+roughly half the evidence.
+
+Expansion is slow — one JavaScript-rendered fetch per post via Jina's
+`x-timeout` header — so it is bounded to the posts carrying the most monetary
+claims. Replies by anyone other than the original author are ignored.
 
 Writes `data/leads/<date>-<query>/` containing `leads.json` and `images/`.
 Reports how many handles appeared in captions (usually zero) and how many
@@ -32,7 +42,8 @@ posts are the richest vein — they name a small channel with its niche and form
 
 ## Step 2 — read the screenshots (this is the step that needs eyes)
 
-Read every file in `<run>/images/`. They are typically YouTube Studio panels or
+Read every file in `<run>/images/`. Files ending `_replyN` are the walkthrough
+steps and are usually where the method — and sometimes the channel — is shown. They are typically YouTube Studio panels or
 channel pages. Extract:
 
 - **`@handle`** — the whole point. Usually in the channel-page header.

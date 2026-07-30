@@ -11,6 +11,7 @@ import pytest
 
 from contentforge.errors import MissingDataError
 from contentforge.providers.threads_research import (
+    read_thread,
     parse_posts,
     profile_url,
     search_url,
@@ -194,3 +195,71 @@ def test_image_urls_do_not_leak_into_text():
 def test_posts_without_images_get_an_empty_tuple():
     posts = parse_posts(SAMPLE, "https://x", NOW)
     assert posts[0].images == ()
+
+
+THREAD = """Markdown Content:
+[adamdelduca](https://www.threads.net/@adamdelduca)
+
+[07/14/26](https://www.threads.net/@adamdelduca/post/ROOT01)
+
+Here's how I did it:
+
+431
+
+[adamdelduca](https://www.threads.net/@adamdelduca)
+
+[07/14/26](https://www.threads.net/@adamdelduca/post/STEP01)
+
+·Author
+
+[![Image 4](https://scontent-sea1-1.cdninstagram.com/v/step1.jpg?x=1)](https://www.threads.net/@adamdelduca/post/STEP01)
+
+7
+
+[somecommenter](https://www.threads.net/@somecommenter)
+
+[07/14/26](https://www.threads.net/@somecommenter/post/REPLY1)
+
+nice post
+
+2
+"""
+
+
+def test_read_thread_returns_root_and_replies():
+    posts = read_thread("https://p", transport=lambda u: THREAD, now=NOW)
+    assert [p.permalink.rsplit("/", 1)[1] for p in posts] == [
+        "ROOT01",
+        "STEP01",
+        "REPLY1",
+    ]
+
+
+def test_author_replies_carry_the_step_images():
+    # The steps are screenshots posted as replies; their text is often empty,
+    # so the images are the payload.
+    posts = read_thread("https://p", transport=lambda u: THREAD, now=NOW)
+    steps = [p for p in posts if p.author == posts[0].author][1:]
+    assert len(steps) == 1
+    assert steps[0].images == ("https://scontent-sea1-1.cdninstagram.com/v/step1.jpg?x=1",)
+
+
+def test_commenters_are_distinguishable_from_the_author():
+    posts = read_thread("https://p", transport=lambda u: THREAD, now=NOW)
+    assert posts[-1].author == "somecommenter"
+
+
+def test_profile_pictures_are_not_collected_as_evidence():
+    markdown = """Markdown Content:
+[a](https://www.threads.net/@a)
+
+[1d](https://www.threads.net/@a/post/P1)
+
+body
+
+[![Image 5: a's profile picture](https://scontent-x.cdninstagram.com/avatar.jpg)](x)
+
+[![Image 6](https://scontent-x.cdninstagram.com/real-screenshot.jpg)](x)
+"""
+    posts = parse_posts(markdown, "https://x", NOW)
+    assert posts[0].images == ("https://scontent-x.cdninstagram.com/real-screenshot.jpg",)

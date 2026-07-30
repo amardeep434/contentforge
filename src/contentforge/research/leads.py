@@ -52,6 +52,10 @@ class Lead:
     money_mentioned: tuple[str, ...]
     handles_from_text: tuple[str, ...]
     image_paths: tuple[str, ...]
+    # Screenshots from the author's own replies. On Threads the top-level post
+    # is usually a teaser ("here's how I did it:") and every actual step is a
+    # reply, posted as an image. Without these the lead is just the headline.
+    reply_image_paths: tuple[str, ...] = field(default=())
     # Filled in after someone reads the screenshots. Empty means "not yet read",
     # which is deliberately distinct from "read, found nothing".
     handles_from_images: tuple[str, ...] = field(default=())
@@ -89,6 +93,9 @@ def gather_leads(
     fetch_image: Callable[[str, Path], Path] = download_image,
     serp_type: str = "default",
     max_images: int = 2,
+    expand: Callable | None = None,
+    max_expand: int = 8,
+    max_reply_images: int = 8,
 ) -> list[Lead]:
     """Stage 1: collect posts and pull down their screenshots.
 
@@ -98,6 +105,12 @@ def gather_leads(
     """
     posts = search(query, serp_type=serp_type)
     leads: list[Lead] = []
+    # Expanding costs a slow rendered fetch each, so it is bounded and spent on
+    # the posts most likely to carry a worked example.
+    worth_expanding = {
+        p.permalink
+        for p in sorted(posts, key=lambda p: -len(money_in(p.text)))[:max_expand]
+    }
     for index, post in enumerate(posts, start=1):
         paths: list[str] = []
         for position, url in enumerate(post.images[:max_images], start=1):
@@ -106,6 +119,29 @@ def gather_leads(
                 paths.append(str(fetch_image(url, target)))
             except Exception:
                 continue
+        reply_paths: list[str] = []
+        if expand is not None and post.permalink in worth_expanding:
+            try:
+                thread = expand(post.permalink)
+            except Exception:
+                thread = []
+            # Only the author's own replies are the walkthrough; other people's
+            # images are unrelated.
+            urls = [
+                url
+                for reply in thread[1:]
+                if reply.author == post.author
+                for url in reply.images
+            ]
+            for position, url in enumerate(urls[:max_reply_images], start=1):
+                target = (
+                    out_dir / "images" / f"{index:02d}_{post.author}_reply{position}.jpg"
+                )
+                try:
+                    reply_paths.append(str(fetch_image(url, target)))
+                except Exception:
+                    continue
+
         leads.append(
             Lead(
                 author=post.author,
@@ -115,6 +151,7 @@ def gather_leads(
                 money_mentioned=money_in(post.text),
                 handles_from_text=extract_handles(post.text, exclude=post.author),
                 image_paths=tuple(paths),
+                reply_image_paths=tuple(reply_paths),
             )
         )
     return leads
@@ -144,7 +181,13 @@ def load_leads(out_dir: Path) -> tuple[str, list[Lead]]:
     # JSON has no tuple, so every sequence returns as a list. Coerce back, or
     # Lead stops being hashable and comparing a reloaded run to a fresh one
     # fails for reasons that have nothing to do with the data.
-    tupled = ("money_mentioned", "handles_from_text", "image_paths", "handles_from_images")
+    tupled = (
+        "money_mentioned",
+        "handles_from_text",
+        "image_paths",
+        "handles_from_images",
+        "reply_image_paths",
+    )
     return record["query"], [
         Lead(**{k: tuple(v) if k in tupled else v for k, v in item.items()})
         for item in record["leads"]

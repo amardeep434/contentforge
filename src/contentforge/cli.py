@@ -226,6 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     leads.add_argument("query")
     leads.add_argument("--tags", action="store_true")
+    leads.add_argument(
+        "--expand", action="store_true",
+        help="also pull the author's reply screenshots, where the step-by-step "
+             "actually lives (slow: one rendered fetch per post)",
+    )
     leads.add_argument("--out", type=Path, default=None)
 
     leads_verify = subparsers.add_parser(
@@ -256,18 +261,26 @@ def main(argv: list[str] | None = None) -> int:
         run_dir = args.out or Path("data/leads") / (
             f"{now:%Y-%m-%d}-{re.sub(r'[^a-z0-9]+', '-', args.query.lower()).strip('-')}"
         )
+        expander = None
+        if args.expand:
+            from contentforge.providers.threads_research import read_thread
+
+            expander = read_thread
         gathered = gather_leads(
             args.query,
             run_dir,
             search=search_threads,
             serp_type="tags" if args.tags else "default",
+            expand=expander,
         )
         save_leads(gathered, run_dir, args.query, now)
         named = sum(1 for lead in gathered if lead.handles_from_text)
         shots = sum(len(lead.image_paths) for lead in gathered)
+        steps = sum(len(lead.reply_image_paths) for lead in gathered)
         print(f"{len(gathered)} posts -> {run_dir}")
         print(f"  handles found in captions: {named}")
         print(f"  screenshots downloaded:    {shots}")
+        print(f"  reply-step screenshots:    {steps}")
         print(
             "\nNext: read the screenshots in "
             f"{run_dir / 'images'} and record any channel names with\n"

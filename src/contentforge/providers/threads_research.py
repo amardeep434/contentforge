@@ -41,7 +41,10 @@ _COUNT_ONLY = re.compile(r"^[\d,.]+[KM]?$")
 # Posts carry screenshots - YouTube Studio panels, channel pages - and the
 # channel being discussed is usually named only there, never in the caption.
 # Dropping these makes a checkable claim look uncheckable.
-_IMAGE = re.compile(r"!\[Image[^\]]*\]\((https://scontent[^)]+)\)")
+# Alt text is captured so avatars can be dropped: Jina renders them as
+# "Image 5: someone's profile picture", and a run that keeps them fills the
+# review step with thumbnails of people's faces instead of evidence.
+_IMAGE = re.compile(r"!\[Image[^\]:]*(:[^\]]*)?\]\((https://scontent[^)]+)\)")
 # Whole links, plus the orphan "](url)" tail Jina leaves when it splits a
 # markdown link across two lines.
 _MARKDOWN_NOISE = re.compile(r"!?\[[^\]]*\]\([^)]*\)|\]\([^)]*\)")
@@ -77,14 +80,40 @@ def search_url(query: str, serp_type: str = "default") -> str:
     return f"{BASE}/search?q={quote(query)}&serp_type={serp_type}"
 
 
-def http_get(url: str) -> str:
+def http_get(url: str, render_seconds: int = 0) -> str:
+    """Fetch through Jina Reader.
+
+    `render_seconds` asks Jina to wait for client-side rendering. Threads loads
+    a post's replies with JavaScript, so without it a permalink returns only the
+    top-level post - which is usually a teaser ending in "here's how I did it:"
+    with every actual step in the replies below.
+    """
     import urllib.request
 
-    request = urllib.request.Request(
-        READER + url, headers={"User-Agent": "contentforge/0.1"}
-    )
-    with urllib.request.urlopen(request, timeout=45) as response:
+    headers = {"User-Agent": "contentforge/0.1"}
+    if render_seconds:
+        headers["x-timeout"] = str(render_seconds)
+    request = urllib.request.Request(READER + url, headers=headers)
+    with urllib.request.urlopen(request, timeout=45 + render_seconds * 2) as response:
         return response.read().decode("utf-8", errors="replace")
+
+
+def http_get_rendered(url: str) -> str:
+    return http_get(url, render_seconds=20)
+
+
+def read_thread(
+    permalink: str,
+    transport: Callable[[str], str] = http_get_rendered,
+    now: datetime | None = None,
+) -> list[ThreadsPost]:
+    """Every post in a thread: the root, then the replies beneath it.
+
+    The author's own replies are the step-by-step payload and are usually
+    screenshots, so their `images` matter more than their (often empty) text.
+    Filter on `author` to separate the author's continuation from commenters.
+    """
+    return _fetch(permalink, transport, now)
 
 
 def _clean(line: str) -> str:
@@ -117,7 +146,11 @@ def parse_posts(markdown: str, source_url: str, now: datetime) -> list[ThreadsPo
         body: list[str] = []
         images: list[str] = []
         for raw in lines[index + 1 : stop]:
-            images.extend(_IMAGE.findall(raw))
+            images.extend(
+                url
+                for alt, url in _IMAGE.findall(raw)
+                if "profile picture" not in alt.lower()
+            )
             text = _clean(raw)
             if text.startswith(_LOGIN_WALL):
                 break

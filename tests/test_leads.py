@@ -171,3 +171,39 @@ def test_report_counts_uncheckable_claims(tmp_path):
     assert "monetary claims naming no channel (uncheckable): 1" in text
     assert "made $50,000" in text
     assert "@chan" in text
+
+
+def test_expansion_pulls_step_images_from_author_replies(tmp_path):
+    root = post(author="guru", text="made $6,000 — here's how:", pid="ROOT")
+    step = post(author="guru", images=("https://cdn/step1.jpg",), pid="STEP")
+    noise = post(author="rando", images=("https://cdn/spam.jpg",), pid="RND")
+
+    def fetch(url, destination):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"x")
+        return destination
+
+    leads = gather_leads(
+        "q",
+        tmp_path,
+        search=lambda q, serp_type: [root],
+        fetch_image=fetch,
+        expand=lambda permalink: [root, step, noise],
+    )
+    # only the author's own replies are steps; a commenter's image is not
+    assert len(leads[0].reply_image_paths) == 1
+    assert "reply1" in leads[0].reply_image_paths[0]
+
+
+def test_expansion_failure_does_not_lose_the_lead(tmp_path):
+    def boom(permalink):
+        raise OSError("render timeout")
+
+    leads = gather_leads(
+        "q",
+        tmp_path,
+        search=lambda q, serp_type: [post(text="made $500")],
+        expand=boom,
+    )
+    assert len(leads) == 1
+    assert leads[0].reply_image_paths == ()
