@@ -208,6 +208,18 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("quota", help="show quota usage, local and authoritative")
 
+    threads = subparsers.add_parser(
+        "threads",
+        help="read Threads posts (no API key, no quota) - claims, not evidence",
+    )
+    threads.add_argument("query", help="search term, or @handle to read a profile")
+    threads.add_argument(
+        "--tags", action="store_true", help="search the tag feed instead of posts"
+    )
+    threads.add_argument(
+        "--limit", type=int, default=20, help="maximum posts to print"
+    )
+
     verify = subparsers.add_parser(
         "verify", help="check a claimed channel statistic against the API"
     )
@@ -221,6 +233,30 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "threads":
+        from contentforge.providers.threads_research import (
+            read_profile,
+            search_threads,
+        )
+
+        if args.query.startswith("@"):
+            posts = read_profile(args.query)
+        else:
+            posts = search_threads(
+                args.query, serp_type="tags" if args.tags else "default"
+            )
+        for post in posts[: args.limit]:
+            print(f"@{post.author} [{post.posted_on}] {post.text}")
+            print(f"    {post.permalink}")
+        print(
+            f"\n{len(posts)} posts. These are unverified claims by strangers. "
+            f"Any channel named here costs 1 quota unit to check with "
+            f"`pipeline verify`; a claim naming no channel cannot be checked "
+            f"at all."
+        )
+        return 0
+
 
     api_key, ledger_path = _credential(args.profile)
 

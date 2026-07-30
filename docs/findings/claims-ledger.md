@@ -618,3 +618,33 @@ the last 28 days, 308K subscribers, 9 videos" with **no channel named**, so it
 cannot be verified with the 1-unit handle lookup that exists for precisely this
 purpose. Cheap access to unverifiable claims is not the same as evidence
 (C-028).
+
+### C-039 · Threads earnings claims are verifiable leads worth researching
+**Status:** `REFUTED` · 2026-07-30 · n=20 posts, 9 monetary claims
+
+Searching "faceless youtube" returned 20 posts, 9 of them making a specific
+monetary claim. **Zero named a channel.**
+
+```
+"$3,084 in the last 28 days, 308K subscribers, 9 videos"     no channel
+"$116,900 in 12 months from ONE faceless YouTube channel"    no channel
+"This AI Sleep channel made me $61,323 in my first year"     no channel
+"22 faceless channels, one made $30,626 last month"          no channel
+"My faceless YouTube channels make me $109K+/month"          no channel
+"I asked Claude to build me a channel... over $6,000"        no channel
+────────────────────────────────────────────────────────────────────────
+monetary claims 9/20        verifiable against the API 0/9
+```
+
+The omission is structural, not incidental: naming the channel is the single
+detail that would let a 1-unit `channels.list` call check the claim, and it is
+the one detail every post leaves out.
+
+*Consequence:* Threads is not a research source for niche or revenue data. Its
+value, if any, is as a **lead generator** — a post naming a channel can be
+verified for 1 unit — and 0 of 9 qualified.
+
+*Separately, the `#youtubecreators` tag is a beginner support community*
+("my first $10", "first 10 subscribers", "drop your channels below"), not a
+strategy source. It is a plausible market for the client-services line mentioned
+in the spec's revenue model, and nothing else.
