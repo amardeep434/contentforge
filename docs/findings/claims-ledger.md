@@ -807,3 +807,41 @@ optimises against the evidence. Plan 3 holds structure fixed and varies content.
 
 *Note the asymmetry this project keeps rediscovering:* a rule adopted to be safe
 can be as wrong as one adopted to be clever, and costs just as much.
+
+### C-045 · One museum's open-access collection is enough for the video pipeline
+**Status:** `REFUTED` · 2026-07-30 · n=9 artists surveyed at the Met
+
+Open-access coverage varies enormously by artist and is **not** predictable from
+fame or death date:
+
+```
+artist        usable PD artworks in the first 12 search results
+Degas          3     Van Gogh   3
+Cezanne        2     Gauguin    2     Manet   2     Seurat  1
+Renoir         0     Monet      0     Klimt   0
+```
+
+Monet is the instructive case. He died in **1926** — comfortably public domain —
+yet every Met record for him is `isPublicDomain: false` with **no image at all**.
+The museum has not released those digitisations. Copyright expiry does not imply
+an available file.
+
+*Caveat on these numbers:* the survey scans only the first 12 search results per
+artist, so they measure *readily reachable* coverage, not total holdings. Monet
+was separately checked across 14 results with the same outcome; the others are a
+signal, not a census.
+
+*Consequences for Plan 3:*
+1. **Survey before choosing a subject.** `survey_artists()` exists for this. A
+   video planned around an artist whose images cannot be obtained is wasted work.
+2. **The Met alone will not sustain a 17–22 minute video**, which needs 40–60
+   artworks. Wikimedia Commons is the obvious second source and is unaffected by
+   one museum's digitisation policy.
+3. Two candidate first subjects that do check out: **Degas** and **Van Gogh**.
+
+*Also recorded:* the Art Institute of Chicago was tried first and dropped — its
+metadata is good, but its IIIF image host returns a Cloudflare HTML challenge
+instead of a JPEG for every user agent tried. And the Met's documented
+`artistOrCulture=true` search flag returns **0 results for every artist tested**
+while the same query without it returns ~170, so artist filtering is done in our
+code instead.
