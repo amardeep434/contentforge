@@ -77,3 +77,59 @@ smoothed over — this is exactly how C-014 died.
 
 Whatever the outcome, it is written into the ledger. A refutation here is a
 successful test, not a failure: it costs one afternoon instead of a build.
+
+---
+
+# Result — REFUTED
+
+Run after this document was committed. Protocol followed as written; nothing was
+adjusted after the data was seen.
+
+**Selection.** 121 channels passed rules 1–3. Applying rule 4 (age matching)
+dropped Kalam Kids (607-day gap), Ali Hassan (490d) and English life stories
+(158d). Eight channels survived, yielding 48 videos, at a cost of 22 quota units:
+143 Explained, WILD NATURE, Geo Study, Plane Curious, Wildlife Unseen Explained,
+Tech Explained, Fantasy Mathematics, Rumi English Stories.
+
+**Attrition.** 17 of 48 videos had no retrievable captions. The loss was balanced
+across groups — 8 hits, 9 flops — so it does not bias the result. 31 usable.
+
+**Outcome.**
+
+```
+A = share of HITS  labelled ATTACHES = 10/16 = 0.62
+B = share of FLOPS labelled ATTACHES = 11/15 = 0.73
+A - B = -0.11                     refutation threshold was <= +0.15
+```
+
+Flops attached marginally more than hits. **REFUTED** on the preregistered
+criterion.
+
+**The per-channel breakdown is the real finding.**
+
+```
+channel                        hits A    flops A      diff
+143 Explained                  1.00(1)   1.00(1)    +0.00
+Geo Study                      0.00(2)   0.00(1)    +0.00
+Plane Curious                  1.00(3)   1.00(3)    +0.00
+Rumi English Stories           1.00(3)   1.00(3)    +0.00
+Tech Explained                 0.00(3)   0.00(3)    +0.00
+WILD NATURE                    1.00(3)   1.00(3)    +0.00
+Fantasy Mathematics            insufficient after caption loss
+Wildlife Unseen Explained      insufficient after caption loss
+```
+
+Every channel scored exactly +0.00. The classification is a property of the
+channel's format, not of the individual video — recorded as C-027.
+
+This retrospectively explains C-014. Art History Explained contains two videos
+that break its own house format; the rule was detecting that inconsistency, not a
+general principle. Consistent channels show no signal at all.
+
+**What the protocol bought.** The blinding is what made this legible. Reading
+these openings unblinded, the temptation to rate a 4.6M-view wildlife opening as
+more vivid than a 16K one would have been strong, and the per-channel constancy —
+the actual finding — would have been invisible. Preregistering the threshold
+meant the verdict was arithmetic rather than judgement.
+
+**Cost:** 22 quota units and one afternoon, against a build.

@@ -237,7 +237,68 @@ Imagine the Physics was the tightest age match in the set (hits 149–203d, flop
 *Third instance of the same error* — see C-004, C-007.
 
 ### C-015 · Hits open on something the viewer already possesses
-**Status:** `HYPOTHESIS` · 2026-07-29 · fits n=16, tested on nothing
+**Status:** `REFUTED` · 2026-07-29 · preregistered blind test, n=31 usable across 8 held-out channels
+
+Tested under [the preregistered protocol](2026-07-29-C015-preregistration.md):
+channels selected by fixed rule, hits and flops chosen by view rank before any
+caption was read, classifications made blind and committed before unblinding,
+ambiguous cases resolved *against* the hypothesis.
+
+```
+A = share of HITS  labelled ATTACHES = 10/16 = 0.62
+B = share of FLOPS labelled ATTACHES = 11/15 = 0.73
+A - B = -0.11          (preregistered refutation threshold: <= +0.15)
+```
+
+Flops attached marginally *more* than hits. Caption attrition was balanced —
+8 hits and 9 flops dropped for missing captions — so the loss is not the cause.
+
+*Superseded by:* C-027, which explains the result.
+
+### C-027 · Opening style is a channel-level constant, not a video-level variable
+**Status:** `CONFIRMED` · 2026-07-29 · n=31 across 8 channels
+
+In the blind test, **every channel scored a difference of exactly +0.00** — hits
+and flops within a channel received identical classifications, without exception.
+
+```
+Tech Explained        hits 0.00  flops 0.00    always definitional
+Geo Study             hits 0.00  flops 0.00    always exam-prep announcements
+Plane Curious         hits 1.00  flops 1.00    always a dated historical scene
+Rumi English Stories  hits 1.00  flops 1.00    always dramatized dialogue
+WILD NATURE           hits 1.00  flops 1.00    always a named animal confrontation
+143 Explained         hits 1.00  flops 1.00
+```
+
+The opening belongs to the channel's format, so it is constant where it matters
+and cannot explain within-channel variance.
+
+**This also explains C-014's false positive.** Art History Explained is unusual
+in containing two videos that break its *own* house format — Caravaggio reads as
+a different or licensed script, Bruegel predates the format settling. The rule
+was detecting format deviation, not a principle about openings. Channels that
+apply their format consistently show no such signal.
+
+*Lesson:* a pattern that separates hits from flops in one channel may be
+measuring that channel's inconsistency rather than anything general.
+
+### C-028 · Public data cannot explain within-channel variance
+**Status:** `CONFIRMED` · 2026-07-29 · by exhaustion, 8 refuted hypotheses
+
+Everything externally observable has now been tested and refuted: mean-based
+ranking (C-001), format (C-010), asset polish (C-011), cut rate (C-012),
+production tooling (C-013), narration start time (C-018), opener formula (C-019),
+and opening style (C-015/C-027).
+
+The remaining candidate is topic selection, and the variable that would decide it
+— click-through rate against impressions — is visible **only to the channel
+owner**. It is not in the Data API for third parties at any quota cost.
+
+*Consequence:* further observational analysis has negative expected value. It
+generates hypotheses faster than it can test them, which is how eight died. The
+next real evidence must come from our own published videos, where retention and
+CTR are visible in Studio. This is what Plan 2 already proposed; what has changed
+is knowing which variables not to spend effort on.
 
 A belief they hold (gravity, time dilation), a person they can picture (Jenny,
 Sarah, McCandless 317 miles up), a grievance they've lived (a $15/hr job ad
