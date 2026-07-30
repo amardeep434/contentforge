@@ -148,3 +148,101 @@ substance, not because their template varies. So:
 
 C-034 in the claims ledger — status `HYPOTHESIS`, since it rests on C-023 (n=8)
 and C-021 (n=14 channels), neither confirmed.
+
+---
+
+# Revision after falsifiers — 2026-07-30
+
+Both falsifiers were run before building. Results below; the recommendation
+**stands but its justification changes materially**.
+
+## F2 — no better alternative exists. Recommendation survives.
+
+Proper searches of finance, investing, business, software, tech and economics
+(niches the main scan covered badly) profiled 31 channels and found **zero
+repeatable ones** (C-036). Re-filtering the 1,189 stored candidates at zero quota
+and scanning the 6 that qualified added none.
+
+Best reachable performers anywhere in a high-RPM niche:
+
+```
+Tech Explained        13,200 subs   median 38,826   hit 21%   v/sub 2.9
+Tech Explainer Guy    10,200 subs   median 24,684   hit 22%   v/sub 2.4
+```
+
+Both miss the 40% hit-rate bar.
+
+## F1 — the exemplar held, but the niche does not. This damages the case.
+
+Two separate results, pulling opposite ways.
+
+**The exemplar forward-tested clean (C-037).** Art History Explained published a
+9th video between scans. Median moved from 112,326 to 111,040 — under 1.2% — and
+skew stayed at 0.9. The prediction was made before the video existed. It did not
+regress.
+
+**But no peer replicates it (C-035).**
+
+```
+channel                      subs      n     median  skew  hit%  v/sub
+Art History Explained      16,700      9    111,040   0.9   56%   6.6
+Narrative Art History      23,300     16     26,106   1.8    6%   1.1
+FINE ART EXPLAINED            994     18      1,312   4.9    0%   1.3
+Chronicles & Chills        11,900     16        617   1.7    0%   0.1
+```
+
+Narrative Art History is **larger and earns 6x less per subscriber**.
+
+So Art History Explained is an outlier *within* art history, not evidence that
+art history is a strong niche. The original recommendation leaned on "this is the
+only reachable repeatable profile" as though the niche carried the property. It
+does not. Entering art history does not buy those numbers.
+
+## What the recommendation now rests on
+
+Across 177 channels profiled in total, exactly **one** reachable repeatable
+channel exists, in any niche. That is n=1. **The niche choice cannot be justified
+on measured demand — there is no pattern to point at**, and C-028 already
+established the deciding variable is invisible from outside.
+
+So the decision falls to the criteria that *are* well-evidenced:
+
+| Criterion | Winner | Evidence quality |
+|---|---|---|
+| Copyright position, asset cost | **art history** | case law + EU directive (C-033) |
+| Advertiser suitability | **art history** | official policy text |
+| Architecture fit (provenance) | **art history** | our own codebase |
+| RPM | tech | ⚠️ marketing blogs — untrustworthy |
+| Views at typical execution | roughly a wash | 1.1 v/sub vs 2.4–2.9 |
+
+Art history wins three well-sourced criteria. Tech wins one criterion sourced
+from exactly the tier of evidence this project rejects.
+
+**Recommendation stands: long-form public-domain art history.** But on
+risk-and-feasibility grounds — free legal assets, no advertiser exposure, fits
+the provenance architecture — *not* because the demand data supports it. It does
+not.
+
+## Revised expectations
+
+Plan against **Narrative Art History**, not the exemplar:
+
+```
+realistic target    ~26,000 median views, ~1.1 views per subscriber
+outlier case         111,040 median, 6.6 views/sub  — do not plan for this
+```
+
+At a nominal $8 RPM that is roughly **$200 per video**, not $900. The exemplar is
+the ceiling, not the forecast.
+
+## The runner-up, and when to switch
+
+Tech explainers are the live alternative. Their case rests entirely on the RPM
+gap ($15–25 vs $5–12), and those figures are marketing-blog sourced. **Measuring
+real RPM in Studio after the first monetised videos is the cheapest way to settle
+it** — and that is the same argument as C-028: our own data is the only data that
+answers the questions that matter.
+
+If real art-history RPM comes in at the bottom of its range while views track
+Narrative Art History rather than the exemplar, switching to tech is the correct
+move and the pipeline is niche-agnostic by design.

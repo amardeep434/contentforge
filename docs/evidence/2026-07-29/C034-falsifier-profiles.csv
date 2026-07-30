@@ -1,0 +1,32 @@
+source,niche,channel_id,title,subs,n_long,median,mean,skew,hits,hit_rate,min,max,spread,newest_days,oldest_days
+search,art_bio,UC1I3jchpTW8mvQkzV-fmFoQ,Art History Explained,16700,9,111040,98220,0.88,5,55.6,1223,216954,177.4,0,281
+search,art_bio,UCVE-OXkZPYuSXT86SlaF0Pw,Lives in Time,601,21,251,1457,5.8,0,0.0,24,6788,282.8,107,297
+search,art_bio,UChwlTlzBGmcS7qply4SM3aw,Chronicles & Chills,11900,16,617,1050,1.7,0,0.0,31,5089,164.2,770,913
+search,art_history2,UC_WuuzwdyC82Z81wghc9l-g,Art Frames of History,1320,6,338,400,1.18,0,0.0,93,909,9.8,175,207
+search,art_history2,UCKK7d5tdhiUy3Zmloiua8oQ,FINE ART EXPLAINED,994,18,1312,6408,4.88,0,0.0,140,57231,408.8,1180,1303
+search,art_history2,UC0JxOjts4FNAwNG67Yatz8g,Great Artists Explained by Anabel,1390,50,64,117,1.81,0,0.0,13,679,52.2,1,344
+search,art_history2,UCZNStI0lZrdJtQed7h8Ha5Q,Narrative Art History,23300,16,26106,47871,1.83,1,6.2,2966,336730,113.5,94,1284
+search,art_history2,UCuxBWHmGEdmGX1utApN19ug,Paintings Explained ,1560,5,88,73,0.83,0,0.0,43,96,2.2,25,39
+search,finance,UCkQA8OxvAOFet9IED4qfnHQ,Pinoy.PersonalFinance,11500,42,6918,8915,1.29,0,0.0,3,30950,10316.7,0,404
+search,finance,UCdqYxe31nwmfDdlnpLsYRiQ,Personal Finance TV,18300,22,1820,17721,9.74,1,4.5,279,171540,614.8,1,156
+search,finance,UClUHW4GfRf13yxPz5m5g6Rw,Personal Finance Hub,4050,21,1678,4216,2.51,0,0.0,66,37824,573.1,2,967
+search,finance,UCg5knEqLrU_XrrGkKj_8EPA,Tom's Personal Finance,12400,50,3845,9253,2.41,1,2.0,726,100609,138.6,30,390
+search,finance,UCqGXvpYkG1PbTXhzqvFFVaA,Personal Finance & Coffee,3860,21,191,865,4.53,0,0.0,53,8914,168.2,12,357
+search,finance,UCyCGRqCNcwOVYbL27lA82PA,Personal Finance With Hawa,523,36,200,354,1.77,0,0.0,51,3108,60.9,9,262
+search,finance,UCG3Eptha6hEISzZT7Azymdw,J U M O K E   M I  |  Finance Nerd,93900,50,9548,32701,3.43,3,6.0,1830,426895,233.3,3,507
+search,finance,UCsp5qFT7WU8FQUwlLSKotWw,Personal Finance by Chandu,15700,6,1638,2282,1.39,0,0.0,889,4382,4.9,5,72
+search,finance,UC0y2ykqi0xgKlL6NZTQO6Xg,Finance In Sticks,19000,49,979,15258,15.58,2,4.1,68,470938,6925.6,0,259
+search,investing,UCNKyZaaHYoAZVUuDlLOTc8w,Investing with Harsh & Apoorva,21100,38,10555,18512,1.75,1,2.6,2865,207508,72.4,1,452
+search,investing,UCtnItzU7q_bA1eoEBjqcVrw,Shankar Nath,317000,49,29096,41591,1.43,4,8.2,5705,240437,42.1,12,413
+search,investing,UCS_V5I7u0rlYwDqhbXAqKZg,Lemonn,24200,34,2309,4129,1.79,0,0.0,247,22013,89.1,0,37
+search,business,UC6sAJVtZT93ttwQqgIUv_Gw,Business Communication - Explained in தமிழ்,570,27,37,422,11.42,0,0.0,12,7485,623.8,585,1121
+search,business,UChi_mNETEMNUkTVZtPDl3Bw,Business Explained,3230,9,281,455,1.62,0,0.0,75,1750,23.3,156,293
+search,tech2,UCUZ5sa4DGyK4K0B9XnByR4Q,Technology Explained,861,17,723,1427,1.97,0,0.0,28,6195,221.2,1156,1223
+search,software,UC-JEEiUHe9QRRtGYVek1kAA,Code Wrap,3910,17,493,7350,14.91,0,0.0,83,73078,880.5,134,265
+search,software,UCBsp9Vhj8RCgo6NRrWkgkhA,Engineering Insiders,78900,26,43690,74733,1.71,6,23.1,5484,331360,60.4,149,997
+search,software,UCKk_IEA0wbkibod2u7NctCQ,Software Engineer Meets AI,5470,50,1387,5494,3.96,0,0.0,68,59715,878.2,0,216
+search,software,UCC05kqMzbQUqpAf_kqeOx0A,Software Engineering,1210,49,171,216,1.27,0,0.0,47,769,16.4,4,327
+search,software,UCibbF4gv0nIjWTf3s54u0wQ,Software Engineering & AI,673,50,347,1221,3.52,0,0.0,46,6624,144.0,38,1279
+search,software,UCqaVo9DiHL1D8wzdtmK2RFg,FAANG Senior Engineer,13100,27,5097,7223,1.42,0,0.0,932,40489,43.4,93,242
+search,economics2,UChm-MJUalg8kviSd7RV9QQw,Global Economics Explained,5980,49,491,841,1.71,0,0.0,17,4250,250.0,457,644
+search,economics2,UCnsb0lHGbqbyVAOFtn10auA,Simply Economics,1690,50,412,791,1.92,0,0.0,9,6912,768.0,606,798

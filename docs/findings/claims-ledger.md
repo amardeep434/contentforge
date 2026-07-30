@@ -524,3 +524,65 @@ subscribers surfacing in finance, business or tech, none of which the scan
 covered properly — re-filterable from the 1,189 stored candidates at zero quota.
 
 *Source for advertiser suitability:* [Advertiser-friendly content guidelines](https://support.google.com/youtube/answer/6162278).
+
+### C-035 · The art history *niche* confers the Art History Explained profile
+**Status:** `REFUTED` · 2026-07-30 · n=12 art/art-history channels
+
+Searching specifically for art-biography and art-history channels found no peer
+that replicates it:
+
+```
+channel                      subs      n     median  skew  hit%  v/sub
+Art History Explained      16,700      9    111,040   0.9   56%   6.6
+Narrative Art History      23,300     16     26,106   1.8    6%   1.1
+FINE ART EXPLAINED            994     18      1,312   4.9    0%   1.3
+Chronicles & Chills        11,900     16        617   1.7    0%   0.1
+```
+
+Narrative Art History is *larger* and earns 6x less per subscriber. Niche
+med-of-medians: art_history 338, art_bio 617.
+
+**Art History Explained is an outlier within its own niche, not an example of a
+strong niche.** Entering art history does not buy its numbers. Whatever produces
+them is channel-specific and not visible from outside (C-028).
+
+*Consequence:* C-034's expected outcome must be anchored to Narrative Art History
+(~26,000 median, 1.1 views/sub), not to the exemplar.
+
+### C-036 · A reachable repeatable channel exists in a higher-RPM niche
+**Status:** `REFUTED` · 2026-07-30 · n=31 across 6 niches, plus 5 re-filtered
+
+Proper searches of finance, investing, business, software, tech and economics —
+niches the main scan covered badly — produced **zero repeatable channels** of 31
+profiled. Re-filtering the 1,189 stored candidates (zero quota) and deep-scanning
+the 6 that qualified added none.
+
+Best reachable performers found:
+
+```
+Tech Explained        13,200 subs   median 38,826   skew 1.6   hit 21%   v/sub 2.9
+Tech Explainer Guy    10,200 subs   median 24,684   skew 2.6   hit 22%   v/sub 2.4
+```
+
+Both miss the 40% hit-rate bar. Niche med-of-medians: investing 10,555, finance
+1,678, software 940, tech 723, economics 452, business 159.
+
+*Consequence:* no better alternative was found, so C-034 survives this falsifier.
+But note the runner-up case: tech at ~2.9 views/sub with a nominal $15–25 RPM
+could out-earn art history at ~1.1 views/sub and $5–12 — **if** those RPM figures
+were trustworthy, which they are not (marketing-blog sourced, see C-034).
+
+### C-037 · The Art History Explained profile is a short run that will regress
+**Status:** `REFUTED` · 2026-07-30 · forward test, n=8 → n=9
+
+The channel published a 9th video between the two scans. The profile held:
+
+```
+             n    median   skew   hit-rate
+before       8   112,326    1.0        62%
+after        9   111,040    0.9        56%
+```
+
+The new video landed below 100,000 (hit-rate fell 62% → 56%) but the median moved
+less than 1.2% and skew stayed at ~1.0. This is a genuine forward test — the
+prediction was made before the video existed — and it did not regress.
