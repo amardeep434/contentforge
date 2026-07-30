@@ -54,3 +54,28 @@ yt-dlp --write-auto-sub --sub-lang "en.*" --skip-download --sub-format vtt -o NA
 
 The entire cross-channel script-structure test cost 10 units, all of it spent
 listing videos rather than reading them.
+
+## pick_holdout.py
+
+Applies the C-015 preregistered selection rule: excludes already-examined
+channels, requires `n_long >= 12` and `spread >= 5`, then age-matches hits
+against flops within each channel and drops any channel whose hit/flop median
+ages differ by 60 days or more.
+
+```bash
+SCAN=docs/evidence/.../profiles.csv OUT=out/holdout.csv .venv/bin/python scripts/pick_holdout.py
+```
+
+**Do not name a script `select.py`** — it shadows the stdlib `select` module and
+breaks `googleapiclient` with a confusing circular-import error.
+
+## Blinding
+
+The C-015 test blinded classification: openings written to one file with opaque
+IDs ordered by hash of the video ID, the ID→views mapping written to another, and
+the calls committed to git before the key was opened. See
+`docs/findings/2026-07-29-C015-preregistration.md`.
+
+Worth repeating for any judgement call made by a model or a person. Unblinded, the
+per-channel constancy that turned out to be the actual finding would have been
+invisible under the temptation to rate the high-view openings as better.

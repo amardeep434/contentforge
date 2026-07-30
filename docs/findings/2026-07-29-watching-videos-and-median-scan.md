@@ -258,3 +258,60 @@ Open and unresolved: what changed to make this format work in the last five
 months when identical titles earned 239 views two years ago (C-024), and whether
 a rigid per-video template survives the "inauthentic content" policy that gates
 monetisation (C-025).
+
+---
+
+## 6. Addendum — C-015 refuted, and observational analysis closed out
+
+C-015 was tested under a [preregistered blind
+protocol](2026-07-29-C015-preregistration.md) and **refuted**: hits attached at
+0.62, flops at 0.73, difference **-0.11** against a refutation threshold of
++0.15. Every one of the six scorable channels scored exactly +0.00 — opening
+style is a channel-level constant (C-027), so it cannot explain within-channel
+variance, and C-014's apparent success was detecting one channel's inconsistency
+with its own format.
+
+That closes the observational programme. Eight externally-visible variables have
+now been tested and refuted:
+
+```
+mean-based ranking      C-001      narration start time   C-018
+format                  C-010      opener formula         C-019
+asset polish            C-011      opening style          C-015 / C-027
+cut rate                C-012      production tooling     C-013
+```
+
+The one remaining candidate is topic selection, and the variable that would
+decide it — click-through rate against impressions — is visible only to the
+channel owner (C-028). No quota buys it.
+
+**So the next evidence has to be our own.** Further public-data analysis
+generates hypotheses faster than it can test them, which is exactly how eight
+died. Plan 2 already proposed publishing a few videos and reading retention; what
+has changed is that we now know which variables not to spend effort on.
+
+### What is settled enough to build on
+
+- Rank on median and hit-rate, never mean (C-003).
+- Compare only within a channel, only between age-matched videos (C-005, C-006).
+- Resolve handles, never guess them (C-008).
+- Do not invest in asset fidelity, template design, or opening-line engineering —
+  all refuted.
+- Instrument from the first upload: retention curve, CTR and impressions per
+  video, so our own data is usable as the controlled experiment public data
+  cannot provide.
+
+### What still blocks a build
+
+1. **Niche and channel identity** — a decision, not a finding. The scan offers
+   aviation (C-021, strongest measured) and the Art History Explained profile
+   (C-023, only reachable one). Both are hypotheses at thin `n`.
+2. **`YOUTUBE_PROJECT_ID` and `GOOGLE_APPLICATION_CREDENTIALS`** — without them
+   quota accounting stays a local forecast rather than an authoritative read.
+3. **YouTube OAuth client** for `videos.insert` (1,600 units per upload).
+4. **Instagram Business conversion and a Meta app** — `instagram_business_basic`,
+   `instagram_business_content_publish`, `threads_basic`,
+   `threads_keyword_search`. 2–4 week App Review, so worth starting before it is
+   needed.
+5. **`src/contentforge/visuals/thumbnail.py` should be deleted or rewritten** —
+   it reproduces the failing copycat's opening frame.
