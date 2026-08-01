@@ -147,6 +147,20 @@ Every attempt to guess a handle hit the wrong channel:
 | `@PaintProfessor` | 154 subs, 1,579 lifetime views — not the channel cited |
 | `@ultrasfctv` | invented by completing a tooltip-covered `@ultrasfct…`; resolved to an unrelated 217-sub channel while the screenshot showed 1.3M views |
 
+*Three of the nine qualifying channels resolved on 2026-07-30 would have been
+guessed wrong from their display names, which is the ordinary case rather than
+the unlucky one:*
+
+| Display name | Actual handle |
+|---|---|
+| Tech Explained | `@techeexplained` (extra e) |
+| Aviation Explained | `@aviationexplainedd` (double d) |
+| Geography Explainer | `@geoexplainer123` (numeric suffix) |
+
+`channels.list` with `part=snippet` returns `customUrl` — the real handle — and
+resolves 50 channels for **1 unit**. Handles are now stored in `potentials.csv`
+so the cost is paid once.
+
 `channels.list` with `forHandle` costs 1 unit and returns the exact channel;
 `search.list` costs 100 and returns a guess.
 
