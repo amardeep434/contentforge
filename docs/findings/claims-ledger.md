@@ -1135,3 +1135,71 @@ observed from near its start.
 *Re-check at 90 and 180 days.* If its median holds near 40,000 the model is real;
 if it follows Zenn, that is the more important finding and it costs 4 units to
 learn.
+
+### C-055 · What actually varies inside Mr. Finance
+**Status:** `CONFIRMED` · 2026-07-30 · n=23 age-matched videos
+
+Format is held rigid — **42 of 42** titles are "The Economics of Owning a [X]",
+median 38 characters, 20–37 minutes, category 22, one upload every ~18 hours.
+So everything that varies is the **subject**, and the spread among videos ≥14
+days old is **31x**.
+
+```
+BEST                            WORST
+217,193  Gym          18d        19,299  Courier Business  24d
+150,325  Ranch        25d        18,837  Private Jet       31d
+121,126  Shopping Mall 29d       18,800  Football Stadium  22d
+ 81,996  Car Dealership 19d       9,185  Gold Mine         16d
+ 70,573  Sports Team  28d         8,571  Private Island    16d
+ 69,870  Gas Station  18d         7,090  Pharmacy          14d
+```
+
+Median among mature videos: **39,235** — not the 20,352 an unfiltered sample
+reports, because the recent half has not finished accumulating.
+
+**The winners are businesses the viewer has physically been inside, whose
+economics are non-obvious.** A gas station is the clearest case: everyone has
+used one, and "how does it make money when fuel margins are pennies?" is a real
+question. Gym (members who never attend), shopping mall (dying?), bank, airport,
+car dealership all share that shape.
+
+The losers fail in two distinct ways. *Private Jet* and *Private Island* are not
+businesses at all — they are possessions, so "owning" poses no economics
+question. *Gold Mine* is unfamiliar; *Pharmacy* feels self-explanatory.
+
+*What is NOT the driver, checked and dismissed:*
+- **Tags.** Only 6 of 42 videos carry any. The top video has 6, the next four
+  have none.
+- **Posting time.** Uploads scatter across 14 hours of the day and all seven
+  weekdays with no pattern; the best videos went out Mon 12h, Mon 12h, Fri 09h,
+  Sun 22h, Sat 10h.
+- **Duration.** 20–25 min carries 30 of 42 videos; the 30–50 min band scores
+  higher but n=3.
+- **Country/keywords.** Channel country is unset, channel keywords empty.
+
+*Engagement:* 2.6% median like rate, ~1,600-character SEO descriptions.
+
+### C-056 · The open-source YouTube automation tools fit our use case
+**Status:** `REFUTED` · 2026-07-30 · 3 repos reviewed
+
+All three are **short-form** generators; Mr. Finance's format is 20–37 minutes.
+
+```
+MoneyPrinterTurbo          14-59 second output, Pexels/Pixabay stock
+youtube-automation-agent   ~30s slideshow renderer, 1.7k stars
+OpenMontage                44k stars, AGPLv3, flagship example a 60s short
+```
+
+Adopting any means abandoning long-form and the provenance validator, which is
+the one thing separating this pipeline from the copycats that fail (C-031).
+
+*Three pieces worth taking rather than the whole:*
+1. **Gemini free-tier TTS** (`gemini-3.1-flash-tts-preview`) — a different voice
+   engine at zero spend, directly relevant to C-049 where every edge-tts voice
+   was judged obviously synthetic.
+2. **An SEO agent** for titles, descriptions and tags — not yet built here.
+3. **The YouTube OAuth and publish-queue flow** — Plan 3 Task 6, a solved
+   problem.
+
+*Licence note:* OpenMontage is **AGPLv3**. Copyleft obligations attach if this is
+ever run as a service, which the spec's client-work ambition contemplates.
