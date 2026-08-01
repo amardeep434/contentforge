@@ -92,6 +92,15 @@ class Potential:
     last_checked: str
 
     @property
+    def url(self) -> str:
+        """A link you can open.
+
+        Always built from the channel id, which never changes and is always
+        stored - a handle can be renamed and was missing from seeded rows.
+        """
+        return f"https://www.youtube.com/channel/{self.channel_id}"
+
+    @property
     def standing(self) -> str:
         """The human's call if there is one, otherwise the machine's."""
         return self.status or self.verdict
@@ -244,5 +253,6 @@ def summarise(rows: list[Potential]) -> str:
                 f"    {row.label:<26} {row.subs:>8,} subs  "
                 f"median {row.median:>9,}  {row.views_per_sub:>5.1f} views/sub"
             )
+            lines.append(f"      {row.url}")
             lines.append(f"      {row.verdict_reason}")
     return "\n".join(lines)

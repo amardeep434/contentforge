@@ -338,10 +338,10 @@ def main(argv: list[str] | None = None) -> int:
             print()
             for row in rows:
                 print(
-                    f"  {row.status:<10} {row.label:<26} {row.subs:>9,} subs  "
-                    f"median {row.median:>9,}  skew {row.skew:>5}  "
-                    f"{'repeatable' if row.repeatable else ''}"
+                    f"  {row.standing or '-':<9} {row.label:<26} {row.subs:>9,} subs  "
+                    f"median {row.median:>9,}  {row.views_per_sub:>5.1f} v/sub"
                 )
+                print(f"            {row.url}")
         return 0
 
     if args.command == "leads":
@@ -493,6 +493,7 @@ def main(argv: list[str] | None = None) -> int:
         shorts = len(videos) - len(long_form)
         age = (now - facts.published_at.value).days
         print(f"{facts.title}   {facts.channel_id}")
+        print(f"  https://www.youtube.com/channel/{facts.channel_id}")
         print(
             f"  subs {facts.subscribers.value:,}   videos {facts.video_count.value}   "
             f"lifetime views {facts.view_count.value:,}   age {age}d"

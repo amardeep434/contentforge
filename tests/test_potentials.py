@@ -213,3 +213,11 @@ def test_standing_and_verdict_share_one_vocabulary():
     from contentforge.research.potentials import VALID_STATUS
 
     assert {EXEMPLAR, WATCH, REJECT} <= set(VALID_STATUS)
+
+
+def test_every_row_carries_an_openable_link():
+    # The channel id was always stored, but a link nobody can see is a link
+    # nobody has. Built from the id, not the handle: ids never change and
+    # seeded rows had no handle at all.
+    row = from_profile(profile(channel_id="UCabc123"), DAY1)
+    assert row.url == "https://www.youtube.com/channel/UCabc123"
