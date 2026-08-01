@@ -187,7 +187,39 @@ GPU is not passed through" from "the model is missing" from "the code is wrong".
 
 ---
 
-## 7. What this does not solve
+## 7. Matching the reference quality
+
+Generating at 768x432 and stretching to 1080p leaves soft lines that look cheap
+next to the channel we are copying. The fix is an upscaler built for line art.
+
+```bash
+mkdir -p ~/.local/share/realesrgan && cd ~/.local/share/realesrgan
+curl -sLO https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+unzip -o realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+chmod +x realesrgan-ncnn-vulkan
+```
+
+This is a self-contained binary — no Python packages, no CUDA, it talks to the
+GPU through Vulkan. About 47 MB including the models.
+
+The pipeline then generates at 768x432, upscales 4x to 3072x1728 with the
+**anime** model (trained on line art, so it rebuilds clean edges instead of
+blurring them), and fits that to exactly 1920x1080.
+
+Measured end to end, per image:
+
+```
+sdxl-turbo generate   6.2 s     better composition
+upscale 4x            ~1 s
+fit to 1080p          instant
+                      ~7 s  →  200 images in about 23 minutes
+```
+
+`sd-turbo` is ~1.3s instead of 6.2s if you want speed over composition.
+
+---
+
+## 8. What this does not solve
 
 **Text inside pictures.** Diffusion models garble lettering — a request for
 "DREAM" produces something that looks like writing and is not. Captions are

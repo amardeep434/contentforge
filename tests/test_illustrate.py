@@ -5,12 +5,16 @@ from pathlib import Path
 import pytest
 
 from contentforge.errors import MissingDataError
+from pathlib import Path
+
 from contentforge.visuals.illustrate import (
     DEFAULT_MODEL,
     HOUSE_STYLE,
     NEGATIVE,
     TURBO_GUIDANCE,
     TURBO_STEPS,
+    HOUSE_STYLE,
+    NEGATIVE,
     build_prompt,
     illustrate,
 )
@@ -87,10 +91,52 @@ def test_turbo_settings_are_what_the_distilled_models_expect():
 
 
 def test_the_negative_prompt_pushes_away_from_observed_failures():
-    for failure in ("photo", "3d render", "shading", "text"):
+    # "shading" was dropped: the reference frame has subtle shading and
+    # excluding it flattened output away from the target, not toward it.
+    for failure in ("photo", "3d render", "text", "grain"):
         assert failure in NEGATIVE
 
 
 def test_the_default_model_is_the_small_one():
     # It fits a 6 GB card resident and is 3x faster than the XL variant.
     assert DEFAULT_MODEL == "stabilityai/sd-turbo"
+
+
+# --- upscaling ---------------------------------------------------------------
+
+def test_the_house_style_matches_the_reference_palette():
+    # Checked against a native-resolution frame: cream background, not blue.
+    assert "cream" in HOUSE_STYLE
+    assert "blue" not in HOUSE_STYLE
+
+
+def test_text_is_pushed_out_of_generated_images():
+    # Diffusion garbles lettering; captions are composited afterwards.
+    for word in ("text", "letters", "words"):
+        assert word in NEGATIVE
+
+
+def test_upscaling_lands_exactly_on_1080p(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from PIL import Image
+    from contentforge.visuals import illustrate as mod
+
+    src = tmp_path / "small.png"
+    Image.new("RGB", (768, 432), "white").save(src)
+    monkeypatch.setattr(mod, "UPSCALER", tmp_path / "fake-upscaler")
+    (tmp_path / "fake-upscaler").write_text("")
+
+    def runner(argv, **kw):
+        out = Path(argv[argv.index("-o") + 1])
+        Image.new("RGB", (3072, 1728), "white").save(out)
+        return SimpleNamespace(returncode=0, stderr="")
+
+    dest = mod.upscale(src, tmp_path / "big.png", runner=runner)
+    assert Image.open(dest).size == (1920, 1080)
+
+
+def test_a_missing_upscaler_says_where_to_look(tmp_path, monkeypatch):
+    from contentforge.visuals import illustrate as mod
+    monkeypatch.setattr(mod, "UPSCALER", tmp_path / "absent")
+    with pytest.raises(MissingDataError, match="local-image-generation"):
+        mod.upscale(tmp_path / "a.png", tmp_path / "b.png")

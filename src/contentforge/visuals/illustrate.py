@@ -44,17 +44,33 @@ LARGE_MODEL = "stabilityai/sdxl-turbo"
 TURBO_STEPS = 4
 TURBO_GUIDANCE = 0.0
 
+#: Real-ESRGAN's anime model, which is trained on line art and reconstructs
+#: clean edges rather than smoothing them. Generating at 768x432 and upscaling
+#: 4x beats generating large: the card cannot do 1080p directly, and a lanczos
+#: stretch leaves soft lines that read as low quality beside the reference.
+UPSCALER = Path.home() / ".local/share/realesrgan/realesrgan-ncnn-vulkan"
+UPSCALE_MODEL = "realesr-animevideov3"
+FINAL_WIDTH, FINAL_HEIGHT = 1920, 1080
+
 #: Held constant across every image so the video looks like one hand drew it.
 #: The reference channel's consistency across 22 minutes is the effect being
 #: reproduced here.
+#: Matched against a native-resolution frame from the reference channel: cream
+#: background, not blue; muted browns and greys; confident bold ink.
 HOUSE_STYLE = (
-    "simple hand drawn line art, thick black ink outline, flat pale blue "
-    "background, minimal cartoon doodle, childrens book illustration, "
-    "no shading, no gradient, not 3d, not a photo"
+    "hand drawn illustration, bold black ink outlines, flat plain cream "
+    "off-white background, muted colours, simple cartoon style, clean confident "
+    "linework, no shading, no gradient, no texture, not 3d, not a photograph"
 )
 
 #: Pushed away from the failure modes seen in testing.
-NEGATIVE = "photo, photorealistic, 3d render, shading, gradient, text, watermark, blurry"
+#: "text" and "letters" are pushed away deliberately: diffusion garbles
+#: lettering, and the reference channel's captions are clean. Words are
+#: composited afterwards instead.
+NEGATIVE = (
+    "photo, photorealistic, 3d render, gradient, blurry, watermark, "
+    "text, letters, words, grain, noise"
+)
 
 
 @dataclass(frozen=True)
@@ -161,6 +177,39 @@ def illustrate(
             )
         made.append(Illustration(path=path, prompt=prompt, seed=image_seed))
     return made
+
+
+def upscale(source: Path, destination: Path, runner: Callable | None = None) -> Path:
+    """4x with the anime model, then fit exactly to 1080p.
+
+    Two steps rather than one because the upscaler only does integer factors;
+    4x overshoots 1080p and the downscale lands it precisely while keeping the
+    reconstructed edges sharp.
+    """
+    import subprocess
+
+    from PIL import Image
+
+    if not UPSCALER.exists():
+        raise MissingDataError(
+            f"upscaler not found at {UPSCALER}. See "
+            "docs/setup/local-image-generation.md"
+        )
+    enlarged = destination.with_suffix(".4x.png")
+    finished = (runner or subprocess.run)(
+        [str(UPSCALER), "-i", str(source), "-o", str(enlarged),
+         "-n", UPSCALE_MODEL, "-s", "4", "-f", "png"],
+        capture_output=True, text=True, timeout=600,
+    )
+    if getattr(finished, "returncode", 1) != 0 or not enlarged.exists():
+        raise MissingDataError(
+            f"upscaling failed: {(getattr(finished, 'stderr', '') or '')[-200:]}"
+        )
+    Image.open(enlarged).resize(
+        (FINAL_WIDTH, FINAL_HEIGHT), Image.LANCZOS
+    ).save(destination)
+    enlarged.unlink()
+    return destination
 
 
 def gpu_report() -> str:

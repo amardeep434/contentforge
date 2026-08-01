@@ -21,7 +21,10 @@ from typing import Callable
 from contentforge.errors import MissingDataError
 
 WIDTH, HEIGHT = 1920, 1080
-FPS = 30
+
+#: The reference channel publishes 25 fps. Matching costs nothing and avoids
+#: a 30-to-25 conversion on YouTube's side.
+FPS = 25
 
 #: Slow push on each still, so a held image is not a frozen frame. The exemplar
 #: does exactly this and nothing more; C-011 says do not spend beyond it.
