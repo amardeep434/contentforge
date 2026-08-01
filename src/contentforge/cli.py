@@ -279,6 +279,21 @@ def main(argv: list[str] | None = None) -> int:
         "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
     )
 
+    illus = subparsers.add_parser(
+        "illustrate",
+        help="generate line art locally on the GPU (free, offline)",
+    )
+    illus.add_argument("--check", action="store_true",
+                       help="report GPU capability and generate one test image")
+    illus.add_argument("--model", default=os.environ.get(
+        "CONTENTFORGE_IMAGE_MODEL", "stabilityai/sd-turbo"))
+    illus.add_argument("--width", type=int,
+                       default=int(os.environ.get("CONTENTFORGE_IMAGE_WIDTH", 768)))
+    illus.add_argument("--height", type=int,
+                       default=int(os.environ.get("CONTENTFORGE_IMAGE_HEIGHT", 432)))
+    illus.add_argument("--out", type=Path, default=Path("data/illustrations"))
+    illus.add_argument("subjects", nargs="*", help="one subject per image")
+
     seen_cmd = subparsers.add_parser(
         "seen", help="what happened to every lead, across all runs"
     )
@@ -310,6 +325,26 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "illustrate":
+        from contentforge.visuals.illustrate import gpu_report, illustrate
+
+        print(f"  {gpu_report()}")
+        subjects = args.subjects or (
+            ["a dumbbell with a large dollar sign on one weight plate"]
+            if args.check else []
+        )
+        if not subjects:
+            raise MissingDataError(
+                "give at least one subject, or pass --check for a test image"
+            )
+        made = illustrate(
+            subjects, args.out, model=args.model,
+            width=args.width, height=args.height,
+        )
+        for item in made:
+            print(f"  {item.path}  seed={item.seed}")
+        return 0
 
     if args.command == "seen":
         from contentforge.research.seen import load_seen, summarise_seen, unsettled

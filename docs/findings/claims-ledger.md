@@ -1274,3 +1274,42 @@ provenance validator — all niche-agnostic.
 *Recorded because it was skipped:* the channel was profiled across three
 sessions, its titles, tags, posting times and topics analysed in detail, and no
 one watched a video until asked why an art-history video had been produced.
+
+### C-059 · Free image generation for this style requires a local GPU
+**Status:** `CONFIRMED` · 2026-08-02 · three options tested
+
+```
+Gemini image gen   NO free tier - GenerateRequestsPerDayPerProjectPerModel-FreeTier
+                   carries no allowance. ~$0.039/image, so 150-250 per video is
+                   $6-10, and a three-video test ~$25.
+Pollinations       free, but serves a single model ("sana"); the model parameter
+                   is ignored. Renders 3D regardless of prompt and garbles text.
+Local diffusion    free, unlimited, offline. Works.
+```
+
+Measured on the RTX 3060 Laptop (6 GB) this project runs on:
+
+```
+sd-turbo     2.58 GB model   3.13 GB peak   0.6-2.1 s/image   200 images ~4 min
+sdxl-turbo   6.9 GB model    2.43 GB peak*  6.4-7.3 s/image   200 images ~23 min
+```
+\* lower peak because it offloads layer by layer, which is also why it is slower.
+
+`sd-turbo` is the default: three times faster, and its output is closer to the
+stark minimal look. A generated crowd of stick figures was near-indistinguishable
+from the reference channel's "CAPACITY 290" frame.
+
+*Two constraints found by running it, not by reading:*
+- **1024x576 OOMs on a 6 GB card** once a desktop is running. Default is 768x432;
+  ffmpeg upscales to 1080p and line art survives that without visible loss.
+- **A browser holds ~2 GB of VRAM.** The first two OOMs were a YouTube video
+  playing in another window, not a model that did not fit.
+
+*Still unsolved:* diffusion garbles lettering, and the reference channel's
+captions are clean and legible. Text must be composited afterwards with PIL
+rather than generated.
+
+*Of the three repos reviewed, only OpenMontage points at this* — its provider
+table lists local Stable Diffusion at "$0 + GPU". Its cloud paths hit the same
+paywall. Adopting the approach, not the dependency: it is AGPLv3 with 700+ files
+built around its own agent framework.
