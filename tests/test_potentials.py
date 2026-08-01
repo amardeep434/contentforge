@@ -149,9 +149,9 @@ def test_summary_counts_by_verdict():
             verdict=judge({**profile(channel_id="UC1", subs=16_700), "n": 12}),
         ),
         from_profile(
-            profile(channel_id="UC2", subs=1_030_000),
+            profile(channel_id="UC2", subs=1_030_000, median=2_000_000),
             DAY1,
-            verdict=judge(profile(channel_id="UC2", subs=1_030_000)),
+            verdict=judge(profile(channel_id="UC2", subs=1_030_000, median=2_000_000)),
         ),
     ]
     text = summarise(rows)
