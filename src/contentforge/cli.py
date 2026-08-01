@@ -511,8 +511,24 @@ def main(argv: list[str] | None = None) -> int:
             subs=facts.subscribers.value,
             operator=operator.kind,
             operator_evidence=operator.evidence,
+            age_days=age,
         )
         verdict = judge(record)
+
+        # C-052: the sample is the 50 most recent videos. On a channel that
+        # peaked early the hits fall outside it and the profile describes only
+        # the aftermath. Lifetime mean against sampled mean detects that for
+        # free - both numbers are already fetched.
+        lifetime_mean = facts.view_count.value / max(facts.video_count.value, 1)
+        gap = lifetime_mean / max(record["mean"], 1)
+        if gap >= 3 and facts.video_count.value > len(videos):
+            print(
+                f"\n  ⚠ lifetime mean {lifetime_mean:,.0f} vs sampled mean "
+                f"{record['mean']:,.0f} ({gap:.0f}x). The unsampled older videos "
+                "hold most of the views - this profile describes recent output "
+                "only, and its skew is not the channel's skew (C-052)."
+            )
+
         print(
             f"\n  median {record['median']:,}   mean {record['mean']:,}   "
             f"skew {record['skew']}   hit-rate {record['hit_rate']}%"

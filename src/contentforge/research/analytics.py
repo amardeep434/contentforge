@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 #: Bump whenever a threshold below changes. Rows judged under an older version
 #: can then be re-analysed rather than trusted.
-CRITERIA_VERSION = "2026-07-30.2"
+CRITERIA_VERSION = "2026-07-30.3"
 
 #: A channel needs enough videos before a median means anything. Three separate
 #: conclusions in this project died from being read off n=4 (C-004/C-007/C-014).
@@ -39,6 +39,13 @@ MIN_VIEWS_PER_SUB = 1.0
 
 #: Retained for reporting, no longer a gate.
 HIT_THRESHOLD_VIEWS = 100_000
+
+#: Views per subscriber assumes a settled channel. On a young one, subscribers
+#: are still compounding faster than per-video views, so the ratio measures age
+#: rather than weakness - Mr. Finance scored 0.4 at 33 days old while adding
+#: 48,600 subscribers from 1.44M views, a 3.4% conversion. Below this age the
+#: test is skipped and the channel is flagged as too young to judge.
+SETTLED_AFTER_DAYS = 90
 
 #: Above this, a channel's views come partly from its existing base and standing,
 #: so its numbers say nothing about a channel starting from zero. Inferring from
@@ -93,6 +100,15 @@ def judge(measurement: dict) -> Verdict:  # noqa: C901
             "be a viable model",
         )
     views_per_sub = median / max(subs, 1)
+    age_days = int(measurement.get("age_days") or 0)
+    too_young = 0 < age_days < SETTLED_AFTER_DAYS
+    if too_young:
+        return verdict(
+            WATCH,
+            f"only {age_days} days old - consistent so far (skew {skew:.1f}, median "
+            f"{median:,}) but views per subscriber is not yet meaningful on a "
+            "channel this young. Worth tracking; too early to copy.",
+        )
     if views_per_sub < MIN_VIEWS_PER_SUB:
         return verdict(
             REJECT,

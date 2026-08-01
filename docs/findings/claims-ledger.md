@@ -1089,3 +1089,49 @@ where the views are. Both numbers are already fetched; nothing extra is needed.
 *Consequence:* a low skew from a 50-video sample means "consistent recently",
 not "consistent". Where the two figures disagree by more than ~3x, page through
 the whole upload list before judging.
+
+### C-053 · Views per subscriber is meaningful on a channel of any age
+**Status:** `REFUTED` · 2026-07-30 · n=1 (Mr. Finance, 33 days old)
+
+It assumes a settled channel. On a young one subscribers compound faster than
+per-video views, so the ratio measures **age**, not weakness.
+
+Mr. Finance scored **0.4 views/sub** and was rejected — while being 33 days old,
+having published 42 videos in that time, and having converted 1.44M views into
+48,600 subscribers. A 3.4% view-to-subscriber conversion is strong, not weak; the
+denominator was simply growing faster than the numerator.
+
+Criteria `2026-07-30.3` skip the test below `SETTLED_AFTER_DAYS = 90` and return
+`watch` with "too early to copy" instead. An **absent** age does not skip it —
+that would be a free pass.
+
+*Second criterion in one day found to be measuring something other than what it
+claimed* — see C-050, where hit-rate at a fixed view threshold was measuring
+channel size. Both were absolute thresholds applied across channels in wildly
+different circumstances. That shape of rule deserves standing suspicion.
+
+### C-054 · Mr. Finance is a live natural experiment worth tracking
+**Status:** `OPEN` · 2026-07-30 · 33 days old at first observation
+
+```
+subs 48,600   videos 42   age 33d   median 20,352   skew 1.73
+The Economics of Owning a Gym            217,186   22m38s
+The Economics of Owning a Ranch          150,323   37m39s
+The Economics Of Owning A Shopping Mall  121,123   20m45s
+```
+
+Everything a faceless template channel should look like: an unlimited title
+template, 20–37 minute long-form, SEO-written descriptions, no operator signals,
+and a cadence of 42 videos in 33 days that no human editing schedule sustains.
+Business economics also resolve to citable sources, which the provenance
+validator requires and which "Iran Is Doomed" does not.
+
+**Why it is `OPEN` rather than a recommendation:** at 33 days nothing is
+established. Zenn looked excellent at four months and then fell 17x (C-051). The
+question C-028 says cannot be answered from mature channels — does this model
+sustain? — is answerable here by simply watching, because the channel is being
+observed from near its start.
+
+*Re-check at 90 and 180 days.* If its median holds near 40,000 the model is real;
+if it follows Zenn, that is the more important finding and it costs 4 units to
+learn.

@@ -136,3 +136,24 @@ def test_the_personal_check_runs_after_the_measurable_ones():
     # that is the more fundamental problem.
     verdict = judge(measurement(skew=9.0, operator="personal"))
     assert "9.0x the median" in verdict.reason
+
+
+def test_a_young_channel_is_not_judged_on_views_per_subscriber():
+    # Mr. Finance: 33 days old, 42 videos, skew 1.73, and 48,600 subscribers
+    # from 1.44M views - a 3.4% conversion. Its 0.4 views/sub measures youth,
+    # not weakness, because subscribers are still compounding.
+    verdict = judge(measurement(subs=48_600, median=20_352, skew=1.73, age_days=33))
+    assert verdict.status == WATCH
+    assert "33 days old" in verdict.reason
+    assert "too early to copy" in verdict.reason
+
+
+def test_a_settled_channel_is_still_judged_on_it():
+    verdict = judge(measurement(subs=600_000, median=60_000, age_days=900))
+    assert verdict.status == REJECT
+    assert "views per subscriber" in verdict.reason
+
+
+def test_an_unknown_age_does_not_skip_the_test():
+    # Absent age must not become a free pass.
+    assert judge(measurement(subs=600_000, median=60_000)).status == REJECT
