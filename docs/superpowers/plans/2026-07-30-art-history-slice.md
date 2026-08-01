@@ -153,7 +153,8 @@ what the exemplar does, and C-011 says do not spend beyond it.
 how the failing copycat worked (C-031) — found imagery pasted in, including a
 diagram it did not own.
 
-- [ ] **Step 1: Failing tests**
+- [x] **DONE 2026-07-30.** Reworked to take per-beat audio clips rather than
+      word timings, so any TTS backend works. See task 2 note.
   - every narration beat maps to exactly one shot
   - shot durations sum to the narration duration (within a tolerance)
   - a beat with no artwork raises rather than reusing the previous image
@@ -174,7 +175,8 @@ is pure and asserted against; `render` shells out through an injected runner.
 
 1080p, `zoompan` for the slow pan, `-c:v libx264 -preset medium -crf 20`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **DONE 2026-07-30.** `build_commands` is pure and asserted; ffmpeg is
+      injected. First real render: 1920x1080 h264+aac, 25.8s.
   - the command references every shot's image
   - the audio track is attached
   - a non-zero ffmpeg exit raises with stderr attached, never a silent partial file

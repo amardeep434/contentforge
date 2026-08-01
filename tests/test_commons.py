@@ -183,3 +183,66 @@ def test_wikidata_markers_are_stripped_from_titles():
     ) == "At Petit-Gennevilliers"
     assert clean_title('Irisestitle QS:P1476,en:"Irises"') == "Irises"
     assert clean_title("A plain title") == "A plain title"
+
+
+def test_accents_in_a_category_do_not_break_attribution():
+    # Commons writes "Paintings by Paul Cézanne". This fix was applied to the
+    # Met module and not here; an end-to-end render found no Cezanne at all.
+    assert by_artist(["Paintings by Paul Cézanne"], "Paul Cezanne")
+    assert by_artist(["Paintings by Paul Cezanne"], "Paul Cézanne")
+
+
+# --- downloading ------------------------------------------------------------
+
+def test_a_rate_limit_is_retried_with_growing_delay(tmp_path):
+    # Commons 429'd partway through the first end-to-end render.
+    import urllib.error
+    from contentforge.sourcing.commons import download_image
+
+    delays, attempts = [], {"n": 0}
+
+    class _Ok:
+        def __enter__(self): return type("R", (), {"read": lambda s: b"jpg"})()
+        def __exit__(self, *a): return False
+
+    def opener(request, timeout=None):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise urllib.error.HTTPError(request.full_url, 429, "slow down", {}, None)
+        return _Ok()
+
+    path = download_image("https://x/a.jpg", tmp_path / "a.jpg",
+                          opener=opener, sleeper=delays.append)
+    assert path.read_bytes() == b"jpg"
+    assert attempts["n"] == 3
+    assert delays[1] > delays[0]        # backoff grows
+
+
+def test_a_404_is_not_retried(tmp_path):
+    import urllib.error
+    from contentforge.sourcing.commons import download_image
+
+    attempts = {"n": 0}
+
+    def opener(request, timeout=None):
+        attempts["n"] += 1
+        raise urllib.error.HTTPError(request.full_url, 404, "gone", {}, None)
+
+    with pytest.raises(MissingDataError, match="404"):
+        download_image("https://x/a.jpg", tmp_path / "a.jpg",
+                       opener=opener, sleeper=lambda s: None)
+    assert attempts["n"] == 1
+
+
+def test_downloads_are_paced_between_files(tmp_path):
+    from contentforge.sourcing.commons import DOWNLOAD_DELAY_SECONDS, download_image
+
+    slept = []
+
+    class _Ok:
+        def __enter__(self): return type("R", (), {"read": lambda s: b"jpg"})()
+        def __exit__(self, *a): return False
+
+    download_image("https://x/a.jpg", tmp_path / "a.jpg",
+                   opener=lambda r, timeout=None: _Ok(), sleeper=slept.append)
+    assert slept == [DOWNLOAD_DELAY_SECONDS]

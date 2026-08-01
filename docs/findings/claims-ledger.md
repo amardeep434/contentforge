@@ -1203,3 +1203,33 @@ the one thing separating this pipeline from the copycats that fail (C-031).
 
 *Licence note:* OpenMontage is **AGPLv3**. Copyleft obligations attach if this is
 ever run as a service, which the spec's client-work ambition contemplates.
+
+### C-057 · The pipeline renders a real video end to end
+**Status:** `CONFIRMED` · 2026-07-30
+
+Public-domain sourcing → narration → shot planning → ffmpeg, with no manual step:
+
+```
+beats          4
+artworks      23 public-domain Cezanne works found, 4 fetched
+narration      4 clips, 23.7s, each timed from its own audio
+shots          4, continuous
+output        29,212,552 bytes, 1920x1080 h264 + aac, 25.8s
+```
+
+*Two bugs only the live run found, both invisible to unit tests:*
+
+1. **Accent folding existed in the Met module and not in Commons.** Commons
+   categorises as "Paintings by Paul Cézanne"; the query said "Cezanne", so the
+   search returned **zero** artworks. The same fix had been written days earlier
+   for the other source and not carried across.
+2. **Commons rate-limits bulk fetches.** An unthrottled download loop earned an
+   HTTP 429 partway through. A twenty-minute video needs ~150 images, so this
+   would have failed every real render. Now paced with exponential backoff, and
+   404s are not retried.
+
+*Design change carried in:* narration is synthesised **one clip per beat** and
+each clip timed from its own audio, rather than aligning a script against a
+word-timing stream. Shot boundaries become exact by construction and the speech
+backend becomes a one-line swap — necessary because Gemini TTS reports no word
+timings at all (C-049).

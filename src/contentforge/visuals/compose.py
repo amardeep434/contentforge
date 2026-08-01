@@ -1,18 +1,21 @@
 """Cut the visuals against the narration.
 
 One image per narration beat, held for exactly as long as that beat is spoken.
-The timings come from `voice.speak`, which reports where every word lands, so
-shot boundaries are measured rather than estimated — an estimate drifts, and
-across twenty minutes it drifts visibly.
+
+Durations come from `voice.backends.synthesise_beats`, which narrates each beat
+separately and measures the resulting audio. That is deliberate: it makes shot
+boundaries exact by construction rather than inferred from a word-timing stream,
+and it works with any speech backend — edge-tts reports word boundaries, Gemini
+reports none, and this module does not care.
 
 **A beat with no image is an error, never a repeat.** Filling a gap by holding
-the previous image, or by dropping in stock, is what the failing copycat did
+the previous image, or dropping in stock, is what the failing copycat did
 (C-031): found imagery pasted in, including a diagram it did not own. A shot
 list that silently covers for missing assets produces a video that looks
 finished and is not.
 
-Niche-agnostic by design. It takes beats and images; it does not care whether
-the images are paintings, diagrams or maps.
+Niche-agnostic: it takes beats and images and does not care whether the images
+are paintings, diagrams or maps.
 """
 
 import re
@@ -20,22 +23,21 @@ from dataclasses import dataclass
 
 from contentforge.errors import MissingDataError
 
-#: Sentence-ish. A beat is the unit a single image has to cover, and sentence
-#: boundaries are where a narrator naturally pauses.
+#: A beat is the unit one image has to cover. Sentence boundaries are where a
+#: narrator naturally pauses, so they are where a cut is least noticeable.
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
-#: Below this a shot is a flicker rather than a beat; adjacent short sentences
-#: are merged into one shot instead.
-MIN_SHOT_SECONDS = 2.5
+#: Below this, a shot reads as a flicker rather than a beat.
+MIN_SHOT_SECONDS = 2.0
 
 
 @dataclass(frozen=True)
 class Shot:
     image_path: str
+    audio_path: str
     start_s: float
     duration_s: float
     text: str
-    chapter: str = ""
 
     @property
     def end_s(self) -> float:
@@ -50,76 +52,53 @@ def split_beats(script: str) -> list[str]:
     return beats
 
 
-def _normalise(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9']+", text.lower())
+def merge_short_beats(beats: list[str], min_words: int = 6) -> list[str]:
+    """Fold very short sentences into the one before.
 
-
-def beat_timings(beats: list[str], words) -> list[tuple[float, float]]:
-    """Locate each beat in the narration timeline, by matching word sequences.
-
-    Walks the timed word list in step with the beats. The narrator's words and
-    the script's words differ in punctuation and casing but not in order, so
-    consuming one word per script word keeps the two aligned without needing an
-    exact match.
+    "He refused." on its own image is a flicker. Merging before synthesis keeps
+    the audio and the shot list in step - merging afterwards would leave an
+    orphan clip.
     """
-    if not words:
-        raise MissingDataError(
-            "no word timings; shot boundaries would have to be guessed, and a "
-            "guess drifts across a long video"
-        )
-    spans: list[tuple[float, float]] = []
-    cursor = 0
+    merged: list[str] = []
     for beat in beats:
-        count = len(_normalise(beat))
-        if count == 0:
-            continue
-        start_index = min(cursor, len(words) - 1)
-        end_index = min(cursor + count - 1, len(words) - 1)
-        spans.append((words[start_index].start_s, words[end_index].end_s))
-        cursor += count
-    if not spans:
-        raise MissingDataError("no beat could be located in the narration")
-    return spans
+        if merged and len(beat.split()) < min_words:
+            merged[-1] = f"{merged[-1]} {beat}"
+        else:
+            merged.append(beat)
+    return merged
 
 
-def plan_shots(script: str, images: list[str], words, chapter: str = "") -> list[Shot]:
-    """One shot per beat, timed against the narration.
-
-    Raises when there are fewer images than beats rather than reusing one.
-    """
-    beats = split_beats(script)
-    spans = beat_timings(beats, words)
-    if len(images) < len(spans):
+def plan_shots(clips, images: list[str]) -> list[Shot]:
+    """One shot per narrated clip, timed by that clip's measured duration."""
+    if not clips:
+        raise MissingDataError("no narration clips to build shots from")
+    if len(images) < len(clips):
         raise MissingDataError(
-            f"{len(spans)} narration beats but only {len(images)} images. A beat "
+            f"{len(clips)} narration beats but only {len(images)} images. A beat "
             "without its own image is an error, not a cue to hold the previous "
-            "one - that is how a video ends up illustrated with someone else's "
-            "material."
+            "one - that is how a video ends up illustrated with material we do "
+            "not own."
         )
 
     shots: list[Shot] = []
-    for index, (start, end) in enumerate(spans):
-        duration = max(end - start, 0.0)
-        if shots and duration < MIN_SHOT_SECONDS:
-            # Too short to register as its own shot: extend the previous one.
-            previous = shots[-1]
-            shots[-1] = Shot(
-                image_path=previous.image_path,
-                start_s=previous.start_s,
-                duration_s=previous.duration_s + duration,
-                text=f"{previous.text} {beats[index]}".strip(),
-                chapter=previous.chapter,
+    cursor = 0.0
+    for index, clip in enumerate(clips):
+        if clip.duration_s < MIN_SHOT_SECONDS:
+            raise MissingDataError(
+                f"beat {index + 1} narrates in {clip.duration_s:.1f}s, under the "
+                f"{MIN_SHOT_SECONDS}s minimum - it would read as a flicker. Merge "
+                "it into a neighbouring beat before synthesis."
             )
-            continue
         shots.append(
             Shot(
-                image_path=images[len(shots)],
-                start_s=start,
-                duration_s=duration,
-                text=beats[index],
-                chapter=chapter,
+                image_path=images[index],
+                audio_path=str(clip.path),
+                start_s=cursor,
+                duration_s=clip.duration_s,
+                text=clip.text,
             )
         )
+        cursor += clip.duration_s
     return shots
 
 
@@ -127,18 +106,18 @@ def total_duration(shots: list[Shot]) -> float:
     return sum(shot.duration_s for shot in shots)
 
 
-def assert_covers(shots: list[Shot], narration_duration: float, tolerance: float = 1.0):
-    """Fail when the shot list does not span the narration.
+def assert_continuous(shots: list[Shot], tolerance: float = 0.01) -> None:
+    """Every shot must begin where the previous one ended.
 
-    A gap is silence over a frozen frame; an overrun is audio that outlives the
-    picture. Both look like a broken render rather than a stylistic choice.
+    A gap renders as silence over a frozen frame and an overlap as a dropped
+    image; both look like a broken render rather than a choice.
     """
     if not shots:
         raise MissingDataError("no shots planned")
-    covered = shots[-1].end_s
-    if abs(covered - narration_duration) > tolerance:
-        raise MissingDataError(
-            f"shots cover {covered:.1f}s but the narration runs "
-            f"{narration_duration:.1f}s - the difference would render as silence "
-            "over a held frame, or audio past the last image"
-        )
+    for previous, current in zip(shots, shots[1:]):
+        if abs(current.start_s - previous.end_s) > tolerance:
+            raise MissingDataError(
+                f"shot at {current.start_s:.2f}s does not follow the previous one "
+                f"ending at {previous.end_s:.2f}s - the difference would render "
+                "as silence over a held frame"
+            )

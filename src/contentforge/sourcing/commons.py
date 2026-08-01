@@ -25,9 +25,12 @@ articles rather than images.
 
 import json
 import re
+import time
+import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 from contentforge.errors import MissingDataError
@@ -73,14 +76,25 @@ def is_free_license(extmetadata: dict) -> bool:
     return _text(extmetadata, "LicenseShortName").lower().startswith("public domain")
 
 
+def _fold(text: str) -> str:
+    """Casefold and strip accents.
+
+    Commons writes "Paintings by Paul Cézanne"; nobody types the accent. The
+    same fix was applied to the Met module and not here, which is why an
+    end-to-end render found no Cezanne at all.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
 def by_artist(categories: list[str], artist: str) -> bool:
     """True when a category attributes the work *to* the artist.
 
     Merely containing the artist's name is not enough — that also matches a
     portrait of them painted by somebody else.
     """
-    folded = [c.casefold() for c in categories]
-    wanted = [_BY_ARTIST.format(kind=k, artist=artist.casefold()) for k in _KINDS]
+    folded = [_fold(c) for c in categories]
+    wanted = [_BY_ARTIST.format(kind=k, artist=_fold(artist)) for k in _KINDS]
     return any(w in c for c in folded for w in wanted)
 
 
@@ -176,3 +190,60 @@ def search_commons(
             "Rendering with no visuals is not a fallback."
         )
     return artworks
+
+
+#: Commons rate-limits bulk fetches. A twenty-minute video needs ~150 images, so
+#: an unthrottled loop reliably earns an HTTP 429 partway through - which it did,
+#: on the first end-to-end render.
+DOWNLOAD_DELAY_SECONDS = 0.4
+MAX_ATTEMPTS = 4
+
+
+def download_image(
+    url: str,
+    destination: Path,
+    opener: Callable | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> Path:
+    """Fetch one image, backing off when Commons asks us to slow down.
+
+    Retries only on 429 and transient network errors. A 404 is not retried -
+    the file genuinely is not there, and hammering it is rude and pointless.
+    """
+    import urllib.error
+    import urllib.request
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fetch = opener or urllib.request.urlopen
+    delay = DOWNLOAD_DELAY_SECONDS
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": UA})
+            with fetch(request, timeout=120) as response:
+                destination.write_bytes(response.read())
+            sleeper(DOWNLOAD_DELAY_SECONDS)
+            return destination
+        except urllib.error.HTTPError as error:
+            if error.code != 429 or attempt == MAX_ATTEMPTS:
+                raise MissingDataError(
+                    f"could not fetch {url[:70]}: HTTP {error.code}"
+                ) from None
+            sleeper(delay)
+            delay *= 2
+        except Exception as error:
+            if attempt == MAX_ATTEMPTS:
+                raise MissingDataError(
+                    f"could not fetch {url[:70]}: {type(error).__name__}"
+                ) from None
+            sleeper(delay)
+            delay *= 2
+    raise MissingDataError(f"could not fetch {url[:70]} after {MAX_ATTEMPTS} attempts")
+
+
+def download_all(artworks, out_dir: Path, **kwargs) -> list[str]:
+    """Fetch every artwork, in order, politely."""
+    paths = []
+    for index, artwork in enumerate(artworks, start=1):
+        target = out_dir / f"img{index:03d}.jpg"
+        paths.append(str(download_image(artwork.image_url, target, **kwargs)))
+    return paths
