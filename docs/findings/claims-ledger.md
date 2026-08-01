@@ -1353,3 +1353,76 @@ generator's wood came out orange against the reference's muted brown.
 
 *Note the Google Fonts API serves woff2, which PIL cannot read.* The `.ttf` has
 to come from the GitHub repo directly.
+
+---
+
+## C-061 — one saturation multiplier cannot reproduce the reference palette
+
+**Status: CONFIRMED.** n=2 frames (one native reference, one generated), each
+measured at 320x180 so a few thousand outlier pixels cannot move the figure.
+
+|  | background | median sat | p90 sat | mean brightness |
+|---|---|---|---|---|
+| reference | rgb(240,232,216) | 0.079 | 0.337 | 0.839 |
+| generated | rgb(232,208,160) | 0.315 | 0.402 | 0.845 |
+
+Brightness already matched to within 0.006. **The entire visible difference was
+chroma** — ours was four times as saturated, which is why a cream wall read as
+tan and a grey fan read as orange.
+
+*What changed it.* The first correction scaled saturation by a single factor to
+land on the reference median. It did, and it took p90 from 0.402 to **0.097**
+against the reference's 0.337 — the wood and the metal went pale along with the
+background. The reference distribution is two things at once: a near-neutral
+flat background *and* objects that are properly coloured. No single multiplier
+produces that shape from a frame where everything is uniformly tan.
+
+Replaced with a two-point fit (median → 0.079, p90 → 0.337), gain capped at 2.4,
+output clamped to the reference's own p99 of 0.397.
+
+**Prompting does not fix this.** The house style already said "flat plain cream
+off-white background, muted colours" and sd-turbo produced the tan frame above
+anyway. The correction is measured per frame and applied after generation, where
+it is arithmetic rather than persuasion.
+
+## C-062 — the generated background is textured and the reference's is flat
+
+**Status: CONFIRMED.** n=1 frame, visually unmistakable once the chroma stretch
+was applied.
+
+sd-turbo puts a paper grain across the background. Both the house style ("no
+texture") and the negative prompt ("grain, noise") ask for it to stop, and it
+does not. At generation size it is nearly invisible; the two-point chroma
+stretch of C-061 multiplies it into visible blotches across the whole frame.
+
+*Fix.* Flatten before stretching: every pixel within 20 of the modal colour
+becomes exactly the modal colour. Safe on this style specifically because the
+prompt forbids gradients and shading, so nothing near the background is meant to
+be a smooth ramp — only linework, which is far outside the tolerance. After the
+stretch, the background is snapped to the reference's own rgb(240,232,216),
+which is the one colour in the frame that can be matched exactly rather than
+approached.
+
+## C-063 — the reference letters onto a drawn sheet, not onto the background
+
+**Status: CONFIRMED.** n=2 frames compared side by side at 1920x1080.
+
+The reference does not float text over the picture. It draws a document — a pale
+sheet with an ink border, tilted slightly, standing on the table — and puts the
+heading, the checklist, a stamp and a signature inside it. Ours placed the same
+words directly on the wall, and that structural difference read as "caption laid
+over a picture" no matter how the type was set.
+
+*Fix, and why it is also the simpler code.* The sheet is drawn deterministically
+before the lettering, so its corner is known exactly and the words are stacked
+from it. That **removes** the search for empty space rather than improving it:
+`find_clear_region` becomes the fallback for frames with no sheet.
+
+*Two things this exposed, both now regression-tested:*
+
+- Sizing the sheet to the text left no room for the stamp and signature, which
+  were drawn over the last checklist row — the same class of overlap as C-060's
+  line-height bug. A reserved footer strip fixes it.
+- Putting the sheet on a fixed side put a document over the subject as soon as
+  the model composed the other way round, which it does freely. The side is now
+  chosen by measuring which half of the frame carries less ink.

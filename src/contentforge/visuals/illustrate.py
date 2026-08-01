@@ -63,6 +63,16 @@ HOUSE_STYLE = (
     "linework, no shading, no gradient, no texture, not 3d, not a photograph"
 )
 
+#: The lettering sits on a drawn sheet occupying roughly half the frame, so the
+#: drawing has to leave that half alone. Asking for it costs nothing and the
+#: layout measures the result anyway - `sheet.quieter_side` puts the document
+#: wherever the ink actually ended up, because the model obeys this about as
+#: often as it obeys anything.
+COMPOSITION = (
+    "subject on the right side of the frame, generous empty background on the "
+    "left, wide shot"
+)
+
 #: Pushed away from the failure modes seen in testing.
 #: "text" and "letters" are pushed away deliberately: diffusion garbles
 #: lettering, and the reference channel's captions are clean. Words are
@@ -80,8 +90,9 @@ class Illustration:
     seed: int
 
 
-def build_prompt(subject: str, style: str = HOUSE_STYLE) -> str:
-    """House style first, subject second.
+def build_prompt(subject: str, style: str = HOUSE_STYLE,
+                 composition: str = COMPOSITION) -> str:
+    """House style first, subject second, composition last.
 
     Order matters for short prompts: tokens early carry more weight, and the
     style is what must never drift between shots.
@@ -89,7 +100,10 @@ def build_prompt(subject: str, style: str = HOUSE_STYLE) -> str:
     subject = (subject or "").strip()
     if not subject:
         raise MissingDataError("an illustration needs a subject to draw")
-    return f"{style}, {subject}"
+    parts = [style, subject]
+    if composition:
+        parts.append(composition)
+    return ", ".join(parts)
 
 
 def load_pipeline(model: str = DEFAULT_MODEL, device: str = "cuda"):

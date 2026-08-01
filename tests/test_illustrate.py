@@ -8,13 +8,12 @@ from contentforge.errors import MissingDataError
 from pathlib import Path
 
 from contentforge.visuals.illustrate import (
+    COMPOSITION,
     DEFAULT_MODEL,
     HOUSE_STYLE,
     NEGATIVE,
     TURBO_GUIDANCE,
     TURBO_STEPS,
-    HOUSE_STYLE,
-    NEGATIVE,
     build_prompt,
     illustrate,
 )
@@ -34,7 +33,18 @@ def test_house_style_leads_the_prompt():
     # must never drift between shots.
     prompt = build_prompt("a dumbbell with a dollar sign")
     assert prompt.startswith(HOUSE_STYLE)
-    assert prompt.endswith("a dumbbell with a dollar sign")
+    assert "a dumbbell with a dollar sign" in prompt
+    assert prompt.endswith(COMPOSITION)
+
+
+def test_the_prompt_asks_for_room_to_put_the_sheet():
+    # The lettering sits on a drawn sheet taking roughly half the frame, so the
+    # drawing has to leave that half alone.
+    assert "empty background" in build_prompt("a fan")
+
+
+def test_composition_can_be_dropped_for_a_frame_with_no_lettering():
+    assert build_prompt("a fan", composition="").endswith("a fan")
 
 
 def test_an_empty_subject_raises():

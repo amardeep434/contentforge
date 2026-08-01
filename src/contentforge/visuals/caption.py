@@ -186,9 +186,28 @@ def line_height(kind: str, size: int) -> int:
     return ascent + descent
 
 
+def stack_blocks(lines: list[tuple[str, int, str]], x: int, y: int,
+                 line_gap: int = 0) -> list[TextBlock]:
+    """Stack lines downward from a known corner.
+
+    Separate from `place_blocks` because when the lettering sits on a drawn
+    sheet the position is already decided - measuring the frame for empty space
+    would be looking for somewhere the sheet is not.
+    """
+    blocks, cursor = [], y
+    for text, size, kind in lines:
+        blocks.append(TextBlock(text, x, cursor, size=size, font=kind))
+        cursor += line_height(kind, size) + line_gap
+    return blocks
+
+
 def place_blocks(image_path: Path, lines: list[tuple[str, int, str]],
                  line_gap: int = 0) -> list[TextBlock]:
-    """Lay out a stack of lines in whatever empty space the frame has."""
+    """Lay out a stack of lines in whatever empty space the frame has.
+
+    The fallback for a frame with no sheet on it. Where there is a sheet, use
+    `stack_blocks` against its known corner instead.
+    """
     from PIL import Image
 
     image = Image.open(image_path)
@@ -197,12 +216,7 @@ def place_blocks(image_path: Path, lines: list[tuple[str, int, str]],
         widths.append(measure(text.replace("[x]", "X"), kind, size)[0])
         heights.append(line_height(kind, size) + line_gap)
     x, y = find_clear_region(image, max(widths), sum(heights))
-
-    blocks, cursor = [], y
-    for (text, size, kind), height in zip(lines, heights):
-        blocks.append(TextBlock(text, x, cursor, size=size, font=kind))
-        cursor += height
-    return blocks
+    return stack_blocks(lines, x, y, line_gap)
 
 
 def measure(text: str, kind: str, size: int) -> tuple[int, int]:

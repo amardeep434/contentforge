@@ -294,6 +294,35 @@ def main(argv: list[str] | None = None) -> int:
     illus.add_argument("--out", type=Path, default=Path("data/illustrations"))
     illus.add_argument("subjects", nargs="*", help="one subject per image")
 
+    make = subparsers.add_parser(
+        "make",
+        help="build a whole video: script, visuals, narration, lettering, mp4",
+    )
+    make.add_argument("slug", help="run name; becomes the directory under --root")
+    make.add_argument(
+        "--script-file", type=Path, default=None,
+        help="narration to use; omitted means read script.txt already in the run",
+    )
+    make.add_argument("--root", type=Path, default=Path("data/videos"))
+    make.add_argument(
+        "--force", action="append", default=[],
+        choices=["spec", "audio", "draw", "letter", "render", "all"],
+        help="redo a stage that is already on disk; repeatable",
+    )
+    make.add_argument("--voice", default=None)
+    make.add_argument(
+        "--voice-backend", default=None, choices=["edge", "gemini"],
+    )
+    make.add_argument("--model", default=None, help="diffusion model")
+    make.add_argument(
+        "--dry-run", action="store_true",
+        help="split into beats and report the plan without generating anything",
+    )
+
+    subparsers.add_parser(
+        "doctor", help="check every local dependency the video pipeline needs"
+    )
+
     seen_cmd = subparsers.add_parser(
         "seen", help="what happened to every lead, across all runs"
     )
@@ -344,6 +373,42 @@ def main(argv: list[str] | None = None) -> int:
         )
         for item in made:
             print(f"  {item.path}  seed={item.seed}")
+        return 0
+
+    if args.command == "doctor":
+        from contentforge.runtime import report
+
+        print(report())
+        return 0
+
+    if args.command == "make":
+        from contentforge import runtime
+        from contentforge.pipeline import beats_for, build_video, load_or_write_script
+
+        run_dir = args.root / args.slug
+        script = args.script_file.read_text() if args.script_file else None
+
+        if args.dry_run:
+            beats = beats_for(load_or_write_script(run_dir, script))
+            print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
+            for index, beat in enumerate(beats, start=1):
+                print(f"  {index:3d}  {beat[:96]}")
+            return 0
+
+        stages = {"spec", "audio", "draw", "letter", "render"} if (
+            "all" in args.force
+        ) else set(args.force)
+        video = build_video(
+            run_dir=run_dir,
+            planner=runtime.spec_planner(),
+            speak=runtime.speaker(args.voice_backend, args.voice),
+            illustrator=runtime.illustrator(args.model),
+            upscaler=runtime.upscaler(),
+            renderer=runtime.renderer(),
+            script=script,
+            force=stages,
+        )
+        print(f"\n  {video}")
         return 0
 
     if args.command == "seen":

@@ -36,9 +36,32 @@ plan is [Plan 3](docs/superpowers/plans/2026-07-30-art-history-slice.md).
     cp .env.example .env        # then put your YOUTUBE_API_KEY in it
     set -a && . ./.env && set +a
 
-Tests never touch a live API:
+Tests never touch a live API, a GPU or ffmpeg — every backend is injected:
 
-    .venv/bin/pytest            # 246 tests
+    .venv/bin/pytest            # 473 tests
+
+### Making a video
+
+    pipeline doctor                                   # what this machine can run
+    pipeline make my-video --script-file script.txt --dry-run
+    pipeline make my-video --script-file script.txt
+
+One command, six stages, one run directory:
+
+    script → spec → audio → draw → letter → render
+
+Each stage writes a named artefact and is skipped if it is already there, so a
+rerun after a crash resumes rather than restarting. `--force draw` redoes one
+stage. `spec.json` is the visual plan and is meant to be edited by hand — it is
+the cheapest place to fix a video.
+
+The lettering, the drawn sheet it sits on and the palette correction are all
+production stages, not post-processing: measured against a native frame from the
+reference channel, the gap was never resolution (C-060), it was that theirs
+carries a legible document and a flat cream background and ours did not.
+
+Full walkthrough: [docs/setup/running-the-pipeline.md](docs/setup/running-the-pipeline.md).
+GPU setup: [docs/setup/local-image-generation.md](docs/setup/local-image-generation.md).
 
 ### Research
 

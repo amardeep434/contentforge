@@ -5,6 +5,22 @@ requires-python = ">=3.11"
 dependencies = [
     "edge-tts>=7.0",
     "google-api-python-client>=2.0",
+    # Lettering, the sheet and the palette correction are all production paths,
+    # not optional extras: a frame without them does not match the reference.
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# Local image generation. Kept optional so research and publishing still work
+# on a machine with no GPU. Install torch from the CUDA index first - see
+# docs/setup/local-image-generation.md; plain `pip install torch` silently
+# fetches the CPU-only build.
+gpu = [
+    "torch>=2.4",
+    "diffusers>=0.30",
+    "transformers>=4.44",
+    "accelerate>=0.33",
+    "safetensors>=0.4",
 ]
 
 [project.scripts]
