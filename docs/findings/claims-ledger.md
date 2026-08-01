@@ -1021,3 +1021,45 @@ subs <150,000, not a personal brand. Re-judging all 176 stored channels cost
 something it never measured, and it silently determined the project's direction
 for a week. Any absolute threshold applied across channels of wildly different
 sizes deserves this suspicion.
+
+### C-051 · Browsing YouTube surfaces channels worth copying
+**Status:** `REFUTED` · 2026-07-30 · n=6 submitted vs 9 scanned
+
+Six channels submitted by hand, all found by encountering them on the platform:
+
+```
+                       subs    v/sub   skew    verdict
+Almost Friday TV   1,020,000    0.2     2.4    reject
+The Analyst          599,000    0.1     2.3    reject
+EverythingProfessor  576,000    0.2     3.6    reject
+Beyond Military      573,000    0.5     1.7    watch
+ThatGuy              223,000    0.1    11.7    reject
+Zenn                 172,000    0.2    19.4    reject
+```
+
+Nine found by systematically scanning 176 channels:
+
+```
+@techeexplained       13,200    2.9     1.6    exemplar
+@truecrimeforensic     8,340    5.5     0.9    exemplar
+@geoexplainer123       1,440    7.3     2.9    exemplar
+```
+
+**Every submitted channel has views/sub ≤0.5; every scanned one has ≥1.1.**
+
+The mechanism is selection, not luck. A channel becomes discoverable by browsing
+*because* it had a viral hit — which is precisely what high skew measures. A
+channel whose videos reliably do 30,000 views is never recommended to anyone, so
+it cannot be found this way at all.
+
+Browsing therefore returns, by construction, the profile that a new channel
+cannot reproduce. Systematic scanning is the only route to the other kind.
+
+*Two of the six are also visibly declining*, having already spent whatever drove
+their hits: Zenn fell ~17x in four months (launch-era median ~513,000, current
+~30,000 at comparable ages) and ThatGuy roughly halved between age bands
+(150–300d: 38,688 → 60–150d: 21,730).
+
+*Corollary:* subscriber count is close to worthless as a signal. The 1.02M
+channel and the 1,440 channel differ by 700x in subscribers and the small one
+converts 36x better per subscriber.
