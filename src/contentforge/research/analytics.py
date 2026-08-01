@@ -48,6 +48,7 @@ REACHABLE_MAX_SUBS = 150_000
 #: Mirrors research.authorship.PERSONAL. Duplicated rather than imported to keep
 #: this module free of dependencies - it must stay pure.
 PERSONAL = "personal"
+NETWORK = "network"
 
 EXEMPLAR = "exemplar"
 WATCH = "watch"
@@ -107,12 +108,14 @@ def judge(measurement: dict) -> Verdict:  # noqa: C901
     # A person narrating their own expertise, with an audience already assembled
     # elsewhere, is not a template a pipeline can follow. This project picked a
     # niche around exactly such a channel before checking (C-048).
-    if measurement.get("operator") == PERSONAL:
+    operator = measurement.get("operator")
+    if operator in (PERSONAL, NETWORK):
+        what = "a personal brand" if operator == PERSONAL else "a team or network"
         return verdict(
             WATCH,
-            "repeatable and reachable, but it is a personal brand rather than a "
-            f"faceless operation ({measurement.get('operator_evidence', 'see check')}) "
-            "- its numbers may rest on the operator, not the format",
+            f"consistent and reachable, but it is {what} rather than a faceless "
+            f"operation ({measurement.get('operator_evidence', 'see check')}) - its "
+            "numbers may rest on the operator, not the format",
         )
     return verdict(
         EXEMPLAR,

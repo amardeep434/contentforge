@@ -102,3 +102,49 @@ def test_the_url_is_built_from_an_id_never_a_handle():
         channel_url("ArtHistoryExplained")
     with pytest.raises(ValueError):
         channel_url("@ArtHistoryExplained")
+
+
+NETWORK_DESCRIPTION = """
+My Other Channel: @HowMoneyWorks @HowBusinessWorked
+Edited By: Svibe Multimedia Studio
+Music Courtesy of: Epidemic Sound
+Select Footage Courtesy of: Getty Images
+Business Inquiries: sponsors@worksmedia.group
+"""
+
+
+def test_a_media_network_is_caught():
+    # The first version of this classifier looked only for tip jars and
+    # newsletters, so it reported UNKNOWN for a four-channel operation with an
+    # outsourced editing studio and paid Getty licences.
+    from contentforge.research.authorship import NETWORK
+
+    verdict = classify_operator(NETWORK_DESCRIPTION)
+    assert verdict.kind == NETWORK
+    assert not verdict.reproducible
+
+
+def test_individual_signals_each_suffice():
+    from contentforge.research.authorship import NETWORK
+
+    for text in (
+        "My other channel: @Something",
+        "Edited by Some Studio",
+        "Business inquiries: hi@company.com",
+        "Footage courtesy of Getty Images",
+        "Music from Epidemic Sound",
+    ):
+        assert classify_operator(text).kind == NETWORK, text
+
+
+def test_a_personal_signal_outranks_a_network_one():
+    # A tip jar is the more specific finding; report that.
+    assert classify_operator(
+        "Tip me at ko-fi.com/x — Edited by A Studio"
+    ).kind == PERSONAL
+
+
+def test_a_plain_faceless_description_is_still_unknown():
+    verdict = classify_operator("Subscribe for more space facts every week.")
+    assert verdict.kind == UNKNOWN
+    assert verdict.reproducible

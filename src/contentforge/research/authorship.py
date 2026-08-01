@@ -50,8 +50,27 @@ _FIRST_PERSON = (
     r"\bnarrated by\b",
 )
 
+#: A team, company or multi-channel network. Different from an individual, but
+#: equally unreproducible: How Money Works Uncut turned out to run an outsourced
+#: editing studio, paid Getty and Epidemic Sound licences, sponsorship deals and
+#: three sibling channels. The first version of this classifier looked only for
+#: tip jars and reported `unknown`.
+_NETWORK_SIGNALS = (
+    (r"\bmy other channels?\b", "sibling channels"),
+    (r"\bour other channels?\b", "sibling channels"),
+    (r"\bedited by\b", "outsourced editing"),
+    (r"\bproduced by\b", "production credit"),
+    (r"\bbusiness inquiries\b", "business contact"),
+    (r"\bsponsors?@", "sponsorship address"),
+    (r"\bgetty images\b", "paid stock licence"),
+    (r"\bepidemic sound\b", "paid music licence"),
+    (r"\bartgrid\b|\bstoryblocks\b|\benvato\b", "paid stock licence"),
+    (r"#\w*partner\b", "brand partnership"),
+)
+
 FACELESS = "faceless"
 PERSONAL = "personal"
+NETWORK = "network"
 UNKNOWN = "unknown"
 
 
@@ -63,6 +82,11 @@ class OperatorVerdict:
     @property
     def is_personal(self) -> bool:
         return self.kind == PERSONAL
+
+    @property
+    def reproducible(self) -> bool:
+        """False when someone or something we cannot replicate is behind it."""
+        return self.kind not in (PERSONAL, NETWORK)
 
 
 def classify_operator(text: str) -> OperatorVerdict:
@@ -89,6 +113,14 @@ def classify_operator(text: str) -> OperatorVerdict:
 
     if found:
         return OperatorVerdict(PERSONAL, "; ".join(found[:4]))
+
+    network: list[str] = []
+    for pattern, label in _NETWORK_SIGNALS:
+        match = re.search(pattern, lowered)
+        if match:
+            network.append(f"{label}: {match.group(0).strip()!r}")
+    if network:
+        return OperatorVerdict(NETWORK, "; ".join(network[:4]))
     return OperatorVerdict(
         UNKNOWN,
         "no personal-brand signals found — this is not proof of a faceless "
