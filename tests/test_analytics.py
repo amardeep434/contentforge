@@ -32,10 +32,10 @@ def test_repeatable_and_small_is_an_exemplar():
     assert "6.7 views per subscriber" in verdict.reason
 
 
-def test_repeatable_but_large_is_watch_not_exemplar():
-    # Its numbers come partly from an existing base, so they say nothing about
-    # a channel starting from zero.
-    verdict = judge(measurement(subs=1_030_000))
+def test_a_large_channel_that_still_pulls_beyond_its_base_is_watch():
+    # Big and genuinely strong: watch it, but its numbers cannot be
+    # extrapolated to a channel starting from zero.
+    verdict = judge(measurement(subs=1_030_000, median=2_000_000))
     assert verdict.status == WATCH
     assert "cannot be extrapolated" in verdict.reason
 
@@ -46,10 +46,27 @@ def test_high_skew_is_rejected_as_lottery_shaped():
     assert "5.7x the median" in verdict.reason
 
 
-def test_low_hit_rate_is_rejected():
-    verdict = judge(measurement(hit_rate=21.0))
+def test_a_channel_not_served_beyond_its_own_audience_is_rejected():
+    # This replaced an absolute hit-rate threshold that was measuring channel
+    # size: "40% of videos above 100,000" rejected 95 of 176 channels, including
+    # every small consistent one worth learning from.
+    verdict = judge(measurement(subs=600_000, median=60_000))
     assert verdict.status == REJECT
-    assert "21% is below 40%" in verdict.reason
+    assert "views per subscriber" in verdict.reason
+
+
+def test_a_tiny_median_is_rejected_as_unviable():
+    verdict = judge(measurement(median=900, subs=100))
+    assert verdict.status == REJECT
+    assert "too small to be a viable model" in verdict.reason
+
+
+def test_a_small_consistent_channel_now_qualifies():
+    # 1,440 subs, 10,515 median - rejected by the old hit-rate gate, which is
+    # the failure that prompted the rewrite.
+    verdict = judge(measurement(subs=1_440, median=10_515, skew=2.9, hit_rate=12.0, n=8))
+    assert verdict.status == EXEMPLAR
+    assert "7.3 views per subscriber" in verdict.reason
 
 
 def test_too_few_videos_is_rejected_before_anything_else():
@@ -80,15 +97,15 @@ def test_judging_is_pure_and_does_not_touch_its_input():
 def test_boundaries_are_inclusive_where_documented():
     assert judge(measurement(n=8)).status != REJECT           # n >= 8 passes
     assert judge(measurement(skew=3.0)).status != REJECT      # skew <= 3 passes
-    assert judge(measurement(hit_rate=40.0)).status != REJECT # hit >= 40 passes
-    assert judge(measurement(subs=80_000)).status == EXEMPLAR # <= 80k reachable
+    assert judge(measurement(median=10_000, subs=9_000)).status != REJECT
+    assert judge(measurement(subs=150_000, median=200_000)).status == EXEMPLAR
 
 
 def test_tally_counts_each_status():
     verdicts = judge_all(
         [
             measurement(channel_id="UC1"),
-            measurement(channel_id="UC2", subs=900_000),
+            measurement(channel_id="UC2", subs=900_000, median=2_000_000),
             measurement(channel_id="UC3", skew=8.0),
         ]
     )

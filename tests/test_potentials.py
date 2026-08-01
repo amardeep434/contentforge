@@ -156,8 +156,8 @@ def test_summary_counts_by_verdict():
     ]
     text = summarise(rows)
     assert "2 channels tracked, 2 judged" in text
-    assert "exemplar (repeatable and reachable): 1" in text
-    assert "watch (repeatable, too large):       1" in text
+    assert "exemplar (consistent and reachable): 1" in text
+    assert "watch (strong but too large):        1" in text
 
 
 def test_a_human_rejection_removes_it_from_the_exemplar_list():

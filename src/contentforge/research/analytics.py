@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 #: Bump whenever a threshold below changes. Rows judged under an older version
 #: can then be re-analysed rather than trusted.
-CRITERIA_VERSION = "2026-07-30.1"
+CRITERIA_VERSION = "2026-07-30.2"
 
 #: A channel needs enough videos before a median means anything. Three separate
 #: conclusions in this project died from being read off n=4 (C-004/C-007/C-014).
@@ -25,14 +25,25 @@ MIN_VIDEOS = 8
 #: than the channel's typical output (C-001).
 MAX_SKEW = 3.0
 
-#: Share of videos clearing the hit threshold. Below this the channel depends on
-#: occasional luck; only ~5% of channels clear it (C-020).
-MIN_HIT_RATE = 40.0
+#: Median views the channel must clear to be a viable model at all.
+MIN_MEDIAN_VIEWS = 10_000
+
+#: Views per subscriber. This is the load-bearing test, and it replaced an
+#: absolute hit-rate threshold that was quietly measuring channel *size*:
+#: "40% of videos above 100,000 views" rejected 95 of 176 channels, including
+#: every small consistent one worth learning from. A channel pulling several
+#: times its subscriber count is being served beyond its own audience, which is
+#: the only way a new channel grows. The giants score 0.1-0.5 here; the small
+#: consistent ones score 3-7.
+MIN_VIEWS_PER_SUB = 1.0
+
+#: Retained for reporting, no longer a gate.
+HIT_THRESHOLD_VIEWS = 100_000
 
 #: Above this, a channel's views come partly from its existing base and standing,
 #: so its numbers say nothing about a channel starting from zero. Inferring from
 #: large channels is the error C-007 was withdrawn for.
-REACHABLE_MAX_SUBS = 80_000
+REACHABLE_MAX_SUBS = 150_000
 
 #: Mirrors research.authorship.PERSONAL. Duplicated rather than imported to keep
 #: this module free of dependencies - it must stay pure.
@@ -74,10 +85,18 @@ def judge(measurement: dict) -> Verdict:  # noqa: C901
             REJECT,
             f"lottery-shaped: mean is {skew:.1f}x the median, above {MAX_SKEW}",
         )
-    if hit_rate < MIN_HIT_RATE:
+    if median < MIN_MEDIAN_VIEWS:
         return verdict(
             REJECT,
-            f"hit-rate {hit_rate:.0f}% is below {MIN_HIT_RATE:.0f}%",
+            f"median {median:,} views is below {MIN_MEDIAN_VIEWS:,} - too small to "
+            "be a viable model",
+        )
+    views_per_sub = median / max(subs, 1)
+    if views_per_sub < MIN_VIEWS_PER_SUB:
+        return verdict(
+            REJECT,
+            f"{views_per_sub:.1f} views per subscriber - it is not being served "
+            "beyond its own audience, which is the only way a new channel grows",
         )
     if subs > REACHABLE_MAX_SUBS:
         return verdict(
@@ -95,11 +114,10 @@ def judge(measurement: dict) -> Verdict:  # noqa: C901
             f"faceless operation ({measurement.get('operator_evidence', 'see check')}) "
             "- its numbers may rest on the operator, not the format",
         )
-    ratio = median / max(subs, 1)
     return verdict(
         EXEMPLAR,
-        f"repeatable and reachable: {subs:,} subs, median {median:,} "
-        f"({ratio:.1f} views per subscriber), skew {skew:.1f}, hit-rate {hit_rate:.0f}%",
+        f"consistent and reachable: {subs:,} subs, median {median:,}, "
+        f"{views_per_sub:.1f} views per subscriber, skew {skew:.1f}",
     )
 
 

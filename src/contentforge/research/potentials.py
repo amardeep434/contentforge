@@ -231,8 +231,8 @@ def summarise(rows: list[Potential]) -> str:
     watching = [r for r in judged if r.standing == "watch"]
     lines = [
         f"{len(rows)} channels tracked, {len(judged)} judged",
-        f"  exemplar (repeatable and reachable): {len(exemplars)}",
-        f"  watch (repeatable, too large):       {len(watching)}",
+        f"  exemplar (consistent and reachable): {len(exemplars)}",
+        f"  watch (strong but too large):        {len(watching)}",
         f"  reject:                              "
         f"{sum(1 for r in judged if r.standing == 'reject')}",
     ]

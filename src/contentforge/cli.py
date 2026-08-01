@@ -264,6 +264,21 @@ def main(argv: list[str] | None = None) -> int:
         "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
     )
 
+    channel = subparsers.add_parser(
+        "channel",
+        help="profile one channel end to end: resolve, measure, operator-check, "
+             "judge, and file it in potentials (~4 units)",
+    )
+    channel.add_argument(
+        "handle",
+        help="channel @handle, a UC... channel id, or a youtube.com URL of "
+             "either. An id is preferred - it needs no resolution and cannot be "
+             "the wrong channel.",
+    )
+    channel.add_argument(
+        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+
     seen_cmd = subparsers.add_parser(
         "seen", help="what happened to every lead, across all runs"
     )
@@ -440,6 +455,85 @@ def main(argv: list[str] | None = None) -> int:
             value = f"{reading.spent:,}" if reading.is_known else "UNKNOWN"
             print(f"  {quota_id:<24} {value}")
             print(f"                   {reading.detail}")
+        return 0
+
+    if args.command == "channel":
+        from contentforge.research.analytics import judge
+        from contentforge.research.authorship import channel_url, check_channel
+        from contentforge.research.leads import profile_views
+        from contentforge.research.potentials import (
+            from_profile,
+            load_potentials,
+            save_potentials,
+            upsert,
+        )
+
+        client = client_for()
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        # Accept a URL of either form; an id skips resolution entirely and,
+        # unlike a handle, cannot silently be the wrong channel (C-008).
+        target = args.handle.strip().rstrip("/").split("/")[-1]
+        if target.startswith("UC") and len(target) == 24:
+            stats, ledger = client.get_channels([target], ledger)
+            facts = stats[0]
+            label = target
+        else:
+            facts, ledger = client.channel_by_handle(target.lstrip("@"), ledger)
+            label = target.lstrip("@")
+        playlists, ledger = client.get_uploads_playlists([facts.channel_id], ledger)
+        ids, ledger = client.get_playlist_video_ids(
+            playlists[facts.channel_id], ledger, max_videos=50
+        )
+        videos, ledger = client.get_videos(ids, ledger)
+        save_ledger(ledger_path, ledger, now, started)
+
+        long_form = [v for v in videos if v.duration_seconds.value >= 120]
+        shorts = len(videos) - len(long_form)
+        age = (now - facts.published_at.value).days
+        print(f"{facts.title}   {facts.channel_id}")
+        print(
+            f"  subs {facts.subscribers.value:,}   videos {facts.video_count.value}   "
+            f"lifetime views {facts.view_count.value:,}   age {age}d"
+        )
+        print(f"  sampled {len(videos)}: {len(long_form)} long-form, {shorts} shorts")
+        if not long_form:
+            raise MissingDataError("no long-form videos to profile")
+
+        record = profile_views([v.view_count.value for v in long_form])
+        operator = check_channel(channel_url(facts.channel_id), videos=3)
+        record.update(
+            channel_id=facts.channel_id,
+            handle=label,
+            title=facts.title,
+            subs=facts.subscribers.value,
+            operator=operator.kind,
+            operator_evidence=operator.evidence,
+        )
+        verdict = judge(record)
+        print(
+            f"\n  median {record['median']:,}   mean {record['mean']:,}   "
+            f"skew {record['skew']}   hit-rate {record['hit_rate']}%"
+        )
+        print(f"  range {record['min']:,} - {record['max']:,}   "
+              f"views/sub {record['median'] / max(facts.subscribers.value, 1):.1f}")
+        print(f"  operator: {operator.kind.upper()} — {operator.evidence[:90]}")
+        print(f"\n  VERDICT: {verdict.status.upper()}")
+        print(f"  {verdict.reason}")
+
+        merged = upsert(
+            load_potentials(args.potentials),
+            [from_profile(record, now, source=f"channel: @{args.handle}", verdict=verdict)],
+        )
+        save_potentials(args.potentials, merged)
+        print(f"\n  filed in {args.potentials}   quota spent {ledger.spent - started}")
+        print("\n  most-viewed long-form:")
+        for video in sorted(long_form, key=lambda v: -v.view_count.value)[:6]:
+            secs = video.duration_seconds.value
+            days = (now - video.published_at.value).days
+            print(f"   {video.view_count.value:>9,}  {secs // 60:>2}m{secs % 60:02d}s  "
+                  f"{days:>4}d  {video.title[:58]}")
         return 0
 
     if args.command == "leads-analyse":

@@ -970,3 +970,40 @@ prose.
 *Recorded as a decision the operator has to make*, not one the pipeline can
 resolve. `synthesise()` takes an injected runner precisely so the backend is a
 one-line swap.
+
+### C-050 · Hit-rate at a fixed view threshold measures repeatability
+**Status:** `REFUTED` · 2026-07-30 · n=176 channels
+
+It measures **size**. "40% of videos above 100,000 views" rejected **95 of 176**
+channels — more than every other criterion combined — and everything it rejected
+was small. A channel at 1,440 subscribers cannot clear it however consistent it
+is, so the gate was asking "is this already big" while claiming to ask "is this
+repeatable".
+
+Every candidate a new channel could actually learn from was filtered out before
+anyone saw it. The niche recommendation was then built on the two survivors, one
+of which turned out to be a human (C-048).
+
+**Replaced by views per subscriber**, which measures whether the algorithm serves
+a channel beyond its own audience — the only way a new channel grows:
+
+```
+The Analyst           599,000 subs   0.1 views/sub
+EverythingProfessor   576,000 subs   0.2
+Beyond Military       573,000 subs   0.5
+Tech Explained         13,200 subs   2.9
+True Crime & Forensic   8,340 subs   5.5
+Geography Explainer     1,440 subs   7.3
+```
+
+The 8,340-subscriber channel converts **55x better per subscriber** than the
+599,000-subscriber one.
+
+*Criteria are now `2026-07-30.2`:* skew ≤3, n ≥8, median ≥10,000, views/sub ≥1.0,
+subs <150,000, not a personal brand. Re-judging all 176 stored channels cost
+**zero quota** — the reason analytics was split from resolution (C-028 era work).
+
+*The general failure:* a threshold chosen for convenience became a proxy for
+something it never measured, and it silently determined the project's direction
+for a week. Any absolute threshold applied across channels of wildly different
+sizes deserves this suspicion.
