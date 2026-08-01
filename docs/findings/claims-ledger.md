@@ -1313,3 +1313,43 @@ rather than generated.
 table lists local Stable Diffusion at "$0 + GPU". Its cloud paths hit the same
 paywall. Adopting the approach, not the dependency: it is AGPLv3 with 700+ files
 built around its own agent framework.
+
+### C-060 · Matching the reference is a resolution problem
+**Status:** `REFUTED` · 2026-08-02 · side-by-side comparison
+
+Upscaling to a true 1920x1080 closed the resolution gap and the frames still did
+not match. Laid side by side the differences were:
+
+```
+REFERENCE                        OURS (before)
+4 elements, wide empty ground    8+ elements, cluttered
+lettering IS the content         no lettering at all
+uniform confident line weight    varying weight, dark patches
+flat fills                       shadow gradients
+no cross-hatching                hatched fan grille
+diagrammatic - explains a point  decorative scene
+subject small and secondary      subject fills the frame
+```
+
+**The gap is intent, not fidelity.** Theirs is a diagram carrying an argument;
+ours was a pretty picture of a fan.
+
+*Three fixes, in order of how much they mattered:*
+
+1. **Composited lettering.** Permanent Marker for headings, Patrick Hand for
+   list items, checkboxes drawn as geometry so they match the ink weight. No
+   diffusion model renders four legible checklist lines plus a stamp and a
+   signature, which is why the reference must be doing the same thing.
+2. **Automatic placement.** The first attempt drew the heading straight across
+   the fan. `find_clear_region` scores an edge-detected grid over the frame and
+   puts text on the quietest area - with 200 frames per video nothing can be
+   positioned by hand.
+3. **Constrained prompts.** "lots of empty space, sparse, uncluttered" plus a
+   negative prompt naming the observed intruders (plant, cup, window, tools,
+   cross-hatching, shadow). Sparseness has to be asked for explicitly.
+
+*Also corrected:* saturation pulled to 0.55 and brightness lifted 1.06 - the
+generator's wood came out orange against the reference's muted brown.
+
+*Note the Google Fonts API serves woff2, which PIL cannot read.* The `.ttf` has
+to come from the GitHub repo directly.

@@ -219,7 +219,27 @@ fit to 1080p          instant
 
 ---
 
-## 8. What this does not solve
+## 8. Fonts for the lettering
+
+The captions are not decoration. Put a reference frame beside a generated one and
+the difference is that theirs carries a heading, a checklist, a stamp and a
+signature, all legible — and the drawing exists to serve them.
+
+```bash
+mkdir -p ~/.local/share/fonts/contentforge && cd ~/.local/share/fonts/contentforge
+B=https://github.com/google/fonts/raw/main
+curl -sLO $B/apache/permanentmarker/PermanentMarker-Regular.ttf
+curl -sLO $B/ofl/patrickhand/PatrickHand-Regular.ttf
+curl -sLO $B/ofl/bangers/Bangers-Regular.ttf
+```
+
+Rename them lowercase (`permanentmarker.ttf`, `patrickhand.ttf`, `bangers.ttf`).
+Permanent Marker is the bold caps heading face; Patrick Hand does list items.
+
+Note the Google Fonts *API* serves woff2, which PIL cannot read. Pull the `.ttf`
+straight from the GitHub repo as above.
+
+## 9. What this does not solve
 
 **Text inside pictures.** Diffusion models garble lettering — a request for
 "DREAM" produces something that looks like writing and is not. Captions are
