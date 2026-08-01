@@ -189,3 +189,86 @@ def test_clips_are_written_where_asked(tmp_path):
     )
     assert all(c.path.exists() for c in clips)
     assert clips[0].path.name == "beat_001.wav"
+
+
+# --- pacing and rate limits -------------------------------------------------
+
+def test_the_pacing_directive_is_prepended_to_the_narration():
+    # Gemini has no rate parameter. Measured on a 41-word passage: no
+    # instruction gives 180 wpm, this directive gives 148, against the
+    # reference channel's 142.
+    from contentforge.voice.backends import NARRATION_STYLE
+
+    seen = {}
+
+    def opener(request, timeout=None):
+        seen["body"] = json.loads(request.data.decode())
+        return fake_response()(request)
+
+    gemini_runner("A fan does not cool a room.", api_key="k", opener=opener)
+    spoken = seen["body"]["contents"][0]["parts"][0]["text"]
+    assert spoken.startswith(NARRATION_STYLE)
+    assert spoken.endswith("A fan does not cool a room.")
+
+
+def test_pacing_can_be_turned_off():
+    seen = {}
+
+    def opener(request, timeout=None):
+        seen["body"] = json.loads(request.data.decode())
+        return fake_response()(request)
+
+    gemini_runner("Bare text.", api_key="k", style="", opener=opener)
+    assert seen["body"]["contents"][0]["parts"][0]["text"] == "Bare text."
+
+
+def _http_error(status):
+    import urllib.error
+
+    return urllib.error.HTTPError("u", status, "msg", {}, None)
+
+
+def test_a_rate_limit_is_retried_rather_than_failing_the_render():
+    # A 200-beat video exhausts the free tier's per-minute allowance many times
+    # over. Treating that as an error would make the backend unusable.
+    attempts = []
+
+    def opener(request, timeout=None):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise _http_error(429)
+        return fake_response()(request)
+
+    audio = gemini_runner("x", api_key="k", opener=opener, sleeper=lambda _: None)
+    assert audio[:4] == b"RIFF"
+    assert len(attempts) == 3
+
+
+def test_a_bad_request_is_not_retried():
+    attempts = []
+
+    def opener(request, timeout=None):
+        attempts.append(1)
+        raise _http_error(400)
+
+    with pytest.raises(MissingDataError, match="HTTP 400"):
+        gemini_runner("x", api_key="k", opener=opener, sleeper=lambda _: None)
+    assert len(attempts) == 1
+
+
+def test_persistent_rate_limiting_eventually_gives_up_and_says_so():
+    def opener(request, timeout=None):
+        raise _http_error(429)
+
+    with pytest.raises(MissingDataError, match="exhausting retries"):
+        gemini_runner("x", api_key="k", opener=opener, sleeper=lambda _: None)
+
+
+def test_an_http_error_never_carries_the_key():
+    def opener(request, timeout=None):
+        raise _http_error(403)
+
+    with pytest.raises(MissingDataError) as caught:
+        gemini_runner("x", api_key="SECRETKEY123", opener=opener,
+                      sleeper=lambda _: None)
+    assert "SECRETKEY123" not in str(caught.value)

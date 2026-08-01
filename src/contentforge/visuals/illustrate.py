@@ -13,13 +13,16 @@ Measured on an RTX 3060 Laptop (6 GB):
     sd-turbo     2.58 GB model, 3.13 GB peak, 0.6-2.1 s/image
     sdxl-turbo   sequential offload, 2.43 GB peak, 6.4-7.3 s/image
 
-`sd-turbo` is the default: it is three times faster and its output is closer to
-the stark, minimal look the reference channel uses. `sdxl-turbo` composes better
-when a beat needs several elements arranged deliberately, at 3x the time.
+`sdxl-turbo` is the default. It composes better when a beat needs several
+elements arranged deliberately, which every lettered frame does, and matching the
+reference turned out to be a composition problem rather than a fidelity one
+(C-060). `sd-turbo` is three times faster and worth a draft pass.
 
-Default size is **768x432**, not 1080p. 1024x576 reliably OOMs on a 6 GB card
-once a desktop is running, and ffmpeg upscales to 1920x1080 at render time -
-line art survives that with no visible loss, unlike photography.
+**Generation size is 768x432; output size is 1920x1080.** These are different
+numbers and the environment variable names refer to the first. 1024x576 reliably
+OOMs on a 6 GB card once a desktop is running, so frames are drawn small and then
+upscaled 4x with Real-ESRGAN's anime model and fitted to exactly 1080p - line art
+survives that with no visible loss, unlike photography.
 
 **Text is not generated into the image.** Diffusion models garble lettering, and
 the reference channel's captions are clean. Words are composited afterwards with
@@ -33,11 +36,20 @@ from typing import Callable
 
 from contentforge.errors import MissingDataError
 
-#: Small, fast, and stylistically closest. Fits a 6 GB card without offloading.
-DEFAULT_MODEL = "stabilityai/sd-turbo"
+#: Better composition, which is what matching the reference turned out to need.
+#: Needs sequential offload on a 6 GB card, and takes ~6.5 s/image against
+#: sd-turbo's ~1.3 s - about 23 minutes for a 200-shot video rather than four.
+#: That trade was made deliberately: the frames carry a diagram with several
+#: arranged elements, and sd-turbo reliably delivers two of any three things
+#: asked for in one prompt.
+DEFAULT_MODEL = "stabilityai/sdxl-turbo"
 
-#: Better composition, ~3x slower, needs sequential offload on 6 GB.
-LARGE_MODEL = "stabilityai/sdxl-turbo"
+#: Three times faster, worse at arranging several elements. Worth passing
+#: --model for a draft pass over a script before committing to a full render.
+FAST_MODEL = "stabilityai/sd-turbo"
+
+#: Kept as the name the offload branch tests against.
+LARGE_MODEL = DEFAULT_MODEL
 
 #: Turbo models are distilled for 1-4 steps and expect no guidance. Raising
 #: either does not improve them; it degrades them.

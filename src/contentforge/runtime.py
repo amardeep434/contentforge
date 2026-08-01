@@ -16,8 +16,11 @@ from typing import Callable
 
 from contentforge.errors import MissingDataError
 
-#: Free, offline, and the closest match to the reference channel's pacing.
-DEFAULT_VOICE_BACKEND = "edge"
+#: Gemini, not edge. Every edge sample carried the same synthetic quality that
+#: a listener rejected as obviously synthetic (C-049, six voices, all refused).
+#: Gemini's tier is materially better and equally free. Both
+#: are free. Gemini needs a key and a network, which is the cost of the change.
+DEFAULT_VOICE_BACKEND = "gemini"
 
 ENV_LLM_BASE_URL = "CONTENTFORGE_LLM_BASE_URL"
 ENV_LLM_KEY = "CONTENTFORGE_LLM_KEY"

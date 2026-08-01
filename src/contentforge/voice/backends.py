@@ -24,6 +24,8 @@ import json
 import os
 import struct
 import subprocess
+import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,18 +65,41 @@ def wrap_pcm_as_wav(pcm: bytes) -> bytes:
     return header + pcm
 
 
+#: Gemini TTS has no rate parameter, so pace is set by instruction. Measured on
+#: a 41-word passage, reference channel at 142 wpm:
+#:
+#:     no instruction                      180 wpm
+#:     "read slowly and deliberately"      122 wpm
+#:     the directive below                 148 wpm
+#:
+#: Within 5% of the exemplar, which is the tolerance C-047 established the pace
+#: can be matched to. The wording is calibration, not decoration - editing it
+#: changes the narration speed of every video.
+NARRATION_STYLE = (
+    "Narrate this like a documentary explainer, unhurried but not laboured:"
+)
+
+#: The free tier's per-minute limit is reached quickly when a video is 150-250
+#: beats, so a rejected request is expected traffic rather than an error.
+MAX_ATTEMPTS = 5
+BACKOFF_SECONDS = 12
+
+
 def gemini_runner(
     text: str,
     voice: str = DEFAULT_GEMINI_VOICE,
     model: str = DEFAULT_GEMINI_MODEL,
     api_key: str | None = None,
     opener: Callable | None = None,
+    style: str = NARRATION_STYLE,
+    sleeper: Callable[[float], None] | None = None,
 ) -> bytes:
     """One utterance from Gemini TTS, returned as WAV bytes.
 
     The key comes from the environment and is never logged: Gemini rejects a bad
     key with a message that echoes the request, so error text is not passed
-    through.
+    through. The HTTP status is, because "429" and "400" call for opposite
+    responses and hiding both made a rate limit look like a broken request.
     """
     key = api_key or os.environ.get("GEMINI_API_KEY", "")
     if not key:
@@ -82,8 +107,9 @@ def gemini_runner(
             "GEMINI_API_KEY is not set. Gemini TTS runs on the same free key as "
             "its text models; get one at aistudio.google.com/apikey"
         )
+    spoken = f"{style}\n\n{text}" if style else text
     payload = {
-        "contents": [{"parts": [{"text": text}]}],
+        "contents": [{"parts": [{"text": spoken}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
@@ -97,17 +123,30 @@ def gemini_runner(
         headers={"Content-Type": "application/json", "x-goog-api-key": key},
         method="POST",
     )
-    try:
-        open_url = opener or urllib.request.urlopen
-        with open_url(request, timeout=180) as response:
-            body = json.loads(response.read().decode())
-    except MissingDataError:
-        raise
-    except Exception as error:
-        # Deliberately not including the error body: it echoes the request.
-        raise MissingDataError(
-            f"Gemini TTS request failed: {type(error).__name__}"
-        ) from None
+    open_url = opener or urllib.request.urlopen
+    pause = sleeper if sleeper is not None else time.sleep
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            with open_url(request, timeout=180) as response:
+                body = json.loads(response.read().decode())
+            break
+        except MissingDataError:
+            raise
+        except urllib.error.HTTPError as error:
+            # Deliberately not including the error body: it echoes the request,
+            # and the request carries the key.
+            status = error.code
+            retriable = status == 429 or status >= 500
+            if not retriable or attempt == MAX_ATTEMPTS:
+                raise MissingDataError(
+                    f"Gemini TTS refused the request with HTTP {status}"
+                    + (" after exhausting retries" if retriable else "")
+                ) from None
+            pause(BACKOFF_SECONDS * attempt)
+        except Exception as error:
+            raise MissingDataError(
+                f"Gemini TTS request failed: {type(error).__name__}"
+            ) from None
 
     try:
         part = body["candidates"][0]["content"]["parts"][0]

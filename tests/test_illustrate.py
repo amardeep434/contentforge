@@ -11,6 +11,7 @@ from contentforge.visuals.illustrate import (
     COMPOSITION,
     DEFAULT_MODEL,
     HOUSE_STYLE,
+    LARGE_MODEL,
     NEGATIVE,
     TURBO_GUIDANCE,
     TURBO_STEPS,
@@ -107,9 +108,17 @@ def test_the_negative_prompt_pushes_away_from_observed_failures():
         assert failure in NEGATIVE
 
 
-def test_the_default_model_is_the_small_one():
-    # It fits a 6 GB card resident and is 3x faster than the XL variant.
-    assert DEFAULT_MODEL == "stabilityai/sd-turbo"
+def test_the_default_model_is_the_one_that_composes_better():
+    # Matching the reference turned out to be a composition problem, not a
+    # fidelity one (C-060), and sd-turbo delivers two of any three things asked
+    # for in a prompt. The XL variant is 3x slower and worth it.
+    assert DEFAULT_MODEL == "stabilityai/sdxl-turbo"
+
+
+def test_the_default_model_is_the_one_that_gets_offloaded():
+    # It does not fit a 6 GB card resident, so the offload branch must key off
+    # the same name the default points at.
+    assert LARGE_MODEL == DEFAULT_MODEL
 
 
 # --- upscaling ---------------------------------------------------------------
