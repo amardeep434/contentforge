@@ -1233,3 +1233,44 @@ each clip timed from its own audio, rather than aligning a script against a
 word-timing stream. Shot boundaries become exact by construction and the speech
 backend becomes a one-line swap — necessary because Gemini TTS reports no word
 timings at all (C-049).
+
+### C-058 · What Mr. Finance actually looks like inside
+**Status:** `CONFIRMED` · 2026-07-30 · watched "The Economics of Owning a Gym" (22:38)
+
+**Hand-drawn line-art animation.** Not artworks, not stock footage, not slides.
+
+```
+pale blue / off-white backgrounds
+black ink line art, deliberately hand-drawn
+stick figures, one accent colour (red) on the focal figure
+hand-lettered caps labels — DREAM, MEET, CAPACITY 290
+chapter numbers in the corner — "TWO"
+a consistent illustrated world across the whole video
+```
+
+This confirms C-011 (crude visuals win) and C-017 (authored per beat) in the
+channel we intend to copy, not by inference from another one.
+
+**The script format is second-person and demolition-shaped:**
+
+> "Okay, so you want to own a gym. Find a building, fill it with treadmills,
+> watch the memberships roll in. That's the plan in your head, and it's not a
+> bad plan. Walk into any gym on a weekday evening, and it looks like the
+> easiest business in the world."
+
+Build the viewer's existing naive assumption, in their head, in the present
+tense — then dismantle it. That is why the winning subjects are businesses
+everyone has been inside (C-055): the format needs an assumption the viewer
+already holds.
+
+*What this invalidates in our build:* `sourcing/artworks.py` and
+`sourcing/commons.py` fetch public-domain **artworks**. Correct for an art-history
+channel and useless here. The visual stage must **generate** line art per beat,
+not retrieve anything.
+
+*Retained regardless:* voice, per-beat synthesis, shot planning, render, and the
+provenance validator — all niche-agnostic.
+
+*Recorded because it was skipped:* the channel was profiled across three
+sessions, its titles, tags, posting times and topics analysed in detail, and no
+one watched a video until asked why an art-history video had been produced.
