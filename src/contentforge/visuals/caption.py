@@ -58,15 +58,16 @@ def load_font(kind: str, size: int):
 
 
 def checklist(items: list[str], x: int, y: int, size: int = 34,
-              spacing: int = 58) -> list[TextBlock]:
+              spacing: int = 0) -> list[TextBlock]:
     """A ticked list, as the reference uses for its checklists.
 
     The tick is drawn as a glyph rather than an image so it inherits the ink
     colour and never mismatches the lettering.
     """
+    step = spacing or (line_height("body", size) + 14)
     blocks = []
     for index, item in enumerate(items):
-        blocks.append(TextBlock(f"[x]  {item.upper()}", x, y + index * spacing,
+        blocks.append(TextBlock(f"[x]  {item.upper()}", x, y + index * step,
                                 size=size, font="body"))
     return blocks
 
@@ -173,17 +174,28 @@ def find_clear_region(image, want_w: int, want_h: int, grid: int = 24,
     return best[1], best[2]
 
 
+def line_height(kind: str, size: int) -> int:
+    """Vertical space one line actually occupies.
+
+    NOT the ink extent. `textbbox` measures the drawn glyphs, so "REQUIREMENT"
+    at 92px reports about cap height and omits ascent and descent entirely -
+    59px short per line, which stacked the heading straight into the checklist
+    beneath it. The font's own metrics are the truth.
+    """
+    ascent, descent = load_font(kind, size).getmetrics()
+    return ascent + descent
+
+
 def place_blocks(image_path: Path, lines: list[tuple[str, int, str]],
-                 line_gap: int = 14) -> list[TextBlock]:
+                 line_gap: int = 0) -> list[TextBlock]:
     """Lay out a stack of lines in whatever empty space the frame has."""
     from PIL import Image
 
     image = Image.open(image_path)
     widths, heights = [], []
     for text, size, kind in lines:
-        w, h = measure(text.replace("[x]", "X"), kind, size)
-        widths.append(w)
-        heights.append(h + line_gap)
+        widths.append(measure(text.replace("[x]", "X"), kind, size)[0])
+        heights.append(line_height(kind, size) + line_gap)
     x, y = find_clear_region(image, max(widths), sum(heights))
 
     blocks, cursor = [], y

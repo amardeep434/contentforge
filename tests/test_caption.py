@@ -99,3 +99,35 @@ def test_measure_grows_with_size():
     small = measure("LEGAL REQUIREMENT", "heading", 30)[0]
     large = measure("LEGAL REQUIREMENT", "heading", 90)[0]
     assert large > small * 2
+
+
+def test_stacked_lines_never_overlap(tmp_path):
+    # The bug this exists to prevent: "REQUIREMENT" at 92px measured 74px of ink
+    # but occupies 133px of line, so the heading was drawn into the checklist
+    # beneath it - 59px of overlap per line.
+    from contentforge.visuals.caption import line_height
+
+    lines = [("LEGAL", 92, "heading"), ("REQUIREMENT", 92, "heading"),
+             ("[x]  ADEQUATE VENTILATION", 38, "body"),
+             ("[x]  AIR CIRCULATION", 38, "body")]
+    blocks = place_blocks(frame(tmp_path), lines)
+    for current, following in zip(blocks, blocks[1:]):
+        bottom = current.y + line_height(current.font, current.size)
+        assert following.y >= bottom, (
+            f"{following.text!r} starts at {following.y} but {current.text!r} "
+            f"runs to {bottom}"
+        )
+
+
+def test_line_height_exceeds_ink_extent():
+    # Ink extent omits ascent and descent; using it for layout is the bug.
+    from contentforge.visuals.caption import line_height
+
+    assert line_height("heading", 92) > measure("REQUIREMENT", "heading", 92)[1]
+
+
+def test_a_checklist_spaces_itself_from_the_font(tmp_path):
+    from contentforge.visuals.caption import line_height
+
+    blocks = checklist(["one", "two"], 100, 200, size=38)
+    assert blocks[1].y - blocks[0].y >= line_height("body", 38)
