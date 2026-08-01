@@ -1063,3 +1063,29 @@ their hits: Zenn fell ~17x in four months (launch-era median ~513,000, current
 *Corollary:* subscriber count is close to worthless as a signal. The 1.02M
 channel and the 1,440 channel differ by 700x in subscribers and the small one
 converts 36x better per subscriber.
+
+### C-052 · Sampling the 50 most recent videos characterises a channel
+**Status:** `REFUTED` · 2026-07-30 · n=94 (SmartishStuff)
+
+The sample misses everything older, and on a channel that peaked early that is
+precisely where the evidence lives.
+
+SmartishStuff profiled at **skew 2.14** — comfortably consistent-looking. Its
+full 94-video history:
+
+```
+three videos at 262-323 days   2,302,092 / 465,144 / 238,754
+the other 91 videos           medians of 500-1,412 across every age band
+```
+
+Three videos carry ~3.0M of 3.2M lifetime views. The hits sit outside the
+50-video window, so the profile described only the post-collapse period and
+reported it as healthy consistency.
+
+**The cheap detector:** lifetime views ÷ video count against the sampled mean.
+Here that was 32,653 versus 2,523 — a 13x gap that says the unsampled videos are
+where the views are. Both numbers are already fetched; nothing extra is needed.
+
+*Consequence:* a low skew from a 50-video sample means "consistent recently",
+not "consistent". Where the two figures disagree by more than ~3x, page through
+the whole upload list before judging.
