@@ -286,6 +286,24 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
 
 # --- render -----------------------------------------------------------------
 
+SUBS_SRT = "subtitles.srt"
+SUBS_VTT = "subtitles.vtt"
+
+
+def write_subtitles(run_dir: Path, shots) -> None:
+    """Timed captions beside the mp4, from the same shot timing it was cut to.
+
+    The subtitle track is the timed transcript: one cue per beat, spanning
+    exactly that beat's measured audio, so it cannot drift from the voice the
+    way a re-transcription would.
+    """
+    from contentforge.render.subtitles import cues_from_shots, to_srt, to_vtt
+
+    cues = cues_from_shots(shots)
+    (run_dir / SUBS_SRT).write_text(to_srt(cues))
+    (run_dir / SUBS_VTT).write_text(to_vtt(cues))
+
+
 def ensure_video(run_dir: Path, clips: list[Clip], frames: list[Path],
                  renderer: Callable, force: bool = False) -> tuple[Path, Stage]:
     out_path = run_dir / VIDEO_NAME
@@ -297,6 +315,7 @@ def ensure_video(run_dir: Path, clips: list[Clip], frames: list[Path],
     renderer(shots, out_path, run_dir / WORK_DIR)
     if not out_path.exists() or out_path.stat().st_size == 0:
         raise MissingDataError(f"{out_path} is missing or empty after rendering")
+    write_subtitles(run_dir, shots)
     minutes = total_duration(shots) / 60
     return out_path, Stage(
         "render", f"{out_path} ({minutes:.1f} min, {len(shots)} shots)"

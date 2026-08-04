@@ -299,3 +299,12 @@ def test_build_video_generates_a_script_when_given_a_writer(tmp_path):
     )
     assert (tmp_path / "run" / "script.txt").read_text().startswith("A ceiling fan")
     assert len(fakes.rendered[0]) == 3
+
+
+def test_a_full_run_writes_timed_subtitles(tmp_path):
+    from contentforge.pipeline import SUBS_SRT, SUBS_VTT
+    build(tmp_path, Fakes(headings=False))
+    run = tmp_path / "run"
+    srt = (run / SUBS_SRT).read_text()
+    assert "00:00:00,000 --> 00:00:04,000" in srt
+    assert (run / SUBS_VTT).read_text().startswith("WEBVTT")
