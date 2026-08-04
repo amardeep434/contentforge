@@ -93,6 +93,14 @@ def scriptwriter(topic: str, source_urls: list[str], client=None):
     return write
 
 
+def metadata_writer(client=None):
+    """A callable that derives YouTube metadata from a script and its sources."""
+    from contentforge.publish.metadata import generate_metadata
+
+    resolved = client or llm_client()
+    return lambda script, sources=None: generate_metadata(resolved, script, sources)
+
+
 def speaker(backend: str | None = None, voice: str | None = None
             ) -> Callable[[str, Path], Path]:
     """Narrate one beat to one file.

@@ -331,6 +331,31 @@ def main(argv: list[str] | None = None) -> int:
         "doctor", help="check every local dependency the video pipeline needs"
     )
 
+    pub = subparsers.add_parser(
+        "publish",
+        help="upload a rendered video to YouTube (private by default)",
+    )
+    pub.add_argument("slug", help="run name under --root, the video to publish")
+    pub.add_argument("--root", type=Path, default=Path("data/videos"))
+    pub.add_argument(
+        "--privacy", default="private", choices=["private", "unlisted", "public"],
+        help="private (default) appears only in your dashboard until you change it",
+    )
+    pub.add_argument("--headline", default=None,
+                     help="thumbnail text; defaults to the generated title")
+    pub.add_argument(
+        "--client-secret", type=Path,
+        default=Path.home() / ".config/contentforge/youtube_client_secret.json",
+    )
+    pub.add_argument(
+        "--token", type=Path,
+        default=Path.home() / ".config/contentforge/youtube_token.json",
+    )
+    pub.add_argument(
+        "--yes", action="store_true",
+        help="skip the confirmation prompt (for unattended runs)",
+    )
+
     seen_cmd = subparsers.add_parser(
         "seen", help="what happened to every lead, across all runs"
     )
@@ -422,6 +447,54 @@ def main(argv: list[str] | None = None) -> int:
             force=stages,
         )
         print(f"\n  {video}")
+        return 0
+
+    if args.command == "publish":
+        from contentforge import runtime
+        from contentforge.pipeline import VIDEO_NAME, load_or_write_script
+        from contentforge.publish import youtube
+        from contentforge.sourcing.fetch import load_sources
+        from contentforge.visuals import thumbnail
+
+        run_dir = args.root / args.slug
+        video = run_dir / VIDEO_NAME
+        if not video.exists():
+            raise MissingDataError(
+                f"no rendered video at {video}; run `pipeline make {args.slug}` first"
+            )
+
+        script = load_or_write_script(run_dir, None)
+        try:
+            sources = load_sources(run_dir)
+        except MissingDataError:
+            sources = []   # a hand-written script may carry no fetched sources
+        meta = runtime.metadata_writer()(script, sources)
+
+        # Build the thumbnail from the first finished frame.
+        frames = sorted((run_dir / "frames").glob("frame_*.png"))
+        if not frames:
+            raise MissingDataError(f"no frames in {run_dir / 'frames'} for a thumbnail")
+        thumb = thumbnail.compose(
+            frames[0], args.headline or meta.title, run_dir / "thumbnail.png"
+        )
+
+        print(f"  title:    {meta.title}")
+        print(f"  privacy:  {args.privacy}")
+        print(f"  tags:     {', '.join(meta.tags)}")
+        print(f"  video:    {video}")
+        print(f"  thumb:    {thumb}")
+        if not args.yes:
+            reply = input(f"\n  upload to YouTube as {args.privacy}? [y/N] ").strip().lower()
+            if reply != "y":
+                print("  aborted; nothing was uploaded")
+                return 0
+
+        creds = youtube.load_credentials(args.client_secret, args.token)
+        service = youtube.build_service(creds)
+        video_id = youtube.upload(service, video, meta, privacy=args.privacy)
+        youtube.set_thumbnail(service, video_id, thumb)
+        youtube.record_upload(run_dir, video_id, args.privacy)
+        print(f"\n  published: {youtube.watch_url(video_id)}")
         return 0
 
     if args.command == "seen":
