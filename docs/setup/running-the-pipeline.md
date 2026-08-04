@@ -197,9 +197,9 @@ anything.
 ### What it does
 
 ```
-script    the prose you wrote
-  ↓ split into sentences, merging any too short to hold a shot
-spec      one LLM call plans every beat: what to draw, what to letter
+script    the prose you wrote, OR generated from --topic + --source URLs,
+  ↓       grounded in the sources and checked for verbatim lifting
+spec      one LLM call per 20 beats: what to draw, what to letter
   ↓
 audio     one narrated clip per beat, each timed with ffprobe
   ↓
@@ -207,20 +207,43 @@ draw      one illustration per beat on your GPU
   ↓
 letter    upscale to 1080p, correct the palette, draw the sheet, add the words
   ↓
-render    ffmpeg, one shot per beat, timed by the measured audio
+render    ffmpeg, one shot per beat, timed by the measured audio,
+          plus subtitles.srt / subtitles.vtt from the same timing
+```
+
+To generate the script instead of writing it:
+
+```bash
+pipeline make ceiling-fans --topic 'how ceiling fans work' \
+    --source https://en.wikipedia.org/wiki/Ceiling_fan \
+    --source https://example.com/another-primary-source
+```
+
+Every factual claim in the generated script must trace to a source; a topic with
+no `--source` is refused rather than invented.
+
+To publish the result, see [publishing.md](publishing.md):
+
+```bash
+pipeline publish ceiling-fans          # private by default, asks before uploading
 ```
 
 ### What it leaves behind
 
 ```
 data/videos/ceiling-fans/
-  script.txt      what you wrote
+  script.txt      what you wrote, or what was generated
+  sources.json    the primary sources a generated script was grounded in
   spec.json       the visual plan - readable, and editable
   manifest.json   every shot with its subject, lettering and duration
   audio/          one wav per beat
   raw/            illustrations at generation size
   frames/         finished 1920x1080 frames
   video.mp4
+  subtitles.srt   timed captions, from the same shot timing
+  subtitles.vtt
+  thumbnail.png   built at publish time, from the first frame
+  published.json  written after a successful upload
 ```
 
 ---
@@ -239,7 +262,7 @@ pipeline make ceiling-fans --force draw --force letter
 pipeline make ceiling-fans --force all
 ```
 
-Stage names: `spec`, `audio`, `draw`, `letter`, `render`.
+Stage names: `script`, `spec`, `audio`, `draw`, `letter`, `render`.
 
 **Editing `spec.json` by hand is expected.** It is the cheapest place to fix a
 video: change a subject or a heading, then `--force draw --force letter --force

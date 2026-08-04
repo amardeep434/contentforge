@@ -38,17 +38,24 @@ plan is [Plan 3](docs/superpowers/plans/2026-07-30-art-history-slice.md).
 
 Tests never touch a live API, a GPU or ffmpeg — every backend is injected:
 
-    .venv/bin/pytest            # 473 tests
+    .venv/bin/pytest            # 536 tests
 
 ### Making a video
 
     pipeline doctor                                   # what this machine can run
-    pipeline make my-video --script-file script.txt --dry-run
-    pipeline make my-video --script-file script.txt
+    pipeline make my-video --topic 'how ceiling fans work' --source URL --source URL
+    pipeline make my-video --script-file script.txt    # or hand-write the script
+    pipeline publish my-video                          # private by default, asks first
 
-One command, six stages, one run directory:
+One command, one run directory, resumable stages:
 
     script → spec → audio → draw → letter → render
+
+`script` is either hand-written (`--script-file`), generated from `--topic` +
+`--source` URLs (grounded in them, checked for verbatim lifting), or a cached
+`script.txt`. `render` also emits `subtitles.srt`/`.vtt` from the same shot
+timing. `publish` derives the title, description and tags, builds the thumbnail
+from the first frame, and uploads — private, behind a confirmation.
 
 Each stage writes a named artefact and is skipped if it is already there, so a
 rerun after a crash resumes rather than restarting. `--force draw` redoes one
@@ -61,6 +68,7 @@ reference channel, the gap was never resolution (C-060), it was that theirs
 carries a legible document and a flat cream background and ours did not.
 
 Full walkthrough: [docs/setup/running-the-pipeline.md](docs/setup/running-the-pipeline.md).
+Publishing: [docs/setup/publishing.md](docs/setup/publishing.md).
 GPU setup: [docs/setup/local-image-generation.md](docs/setup/local-image-generation.md).
 
 ### Research
