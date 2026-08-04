@@ -61,6 +61,9 @@ def run_dir_for(root: Path, slug: str) -> Path:
 
 # --- script -----------------------------------------------------------------
 
+SOURCES_NAME = "sources.json"
+
+
 def load_or_write_script(run_dir: Path, script: str | None) -> str:
     """The script is the one artefact a human may hand-write."""
     path = run_dir / SCRIPT_NAME
@@ -69,12 +72,46 @@ def load_or_write_script(run_dir: Path, script: str | None) -> str:
         path.write_text(script.strip() + "\n")
     if not path.exists():
         raise MissingDataError(
-            f"no script at {path}. Write one there, or pass --script-file"
+            f"no script at {path}. Write one there, pass --script-file, or give "
+            "--topic with --source URLs to generate one"
         )
     text = path.read_text().strip()
     if not text:
         raise MissingDataError(f"{path} is empty; there is nothing to narrate")
     return text
+
+
+def ensure_script(run_dir: Path, script: str | None,
+                  writer: Callable[[Path], str] | None = None,
+                  force: bool = False) -> tuple[str, Stage]:
+    """Resolve the narration: hand-written, cached, or generated from sources.
+
+    A hand-written `--script-file` always wins - a human who wrote a script did
+    not do it to have it overwritten. Otherwise a cached `script.txt` is reused
+    unless forced, and only when neither exists does the injected `writer`
+    generate one from a topic and its sources.
+
+    `writer` is injected so the whole front of the pipeline is testable without
+    a network or an LLM, exactly like every other stage.
+    """
+    path = run_dir / SCRIPT_NAME
+    if script is not None:
+        return load_or_write_script(run_dir, script), Stage(
+            "script", f"{len(script.split())} words, provided"
+        )
+    if path.exists() and not force:
+        text = load_or_write_script(run_dir, None)
+        return text, Stage("script", f"{len(text.split())} words, cached", skipped=True)
+    if writer is None:
+        # No cached script and nothing to generate from.
+        return load_or_write_script(run_dir, None), Stage("script", "loaded")
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    text = writer(run_dir).strip()
+    if not text:
+        raise MissingDataError("script generation produced nothing to narrate")
+    path.write_text(text + "\n")
+    return text, Stage("script", f"{len(text.split())} words, generated")
 
 
 def beats_for(script: str) -> list[str]:
@@ -276,6 +313,7 @@ def build_video(
     upscaler: Callable[[Path, Path], Path],
     renderer: Callable,
     script: str | None = None,
+    scriptwriter: Callable[[Path], str] | None = None,
     force: set[str] | None = None,
     log: Callable[[str], None] = print,
     timer: Callable[[Path], float] = measure_duration,
@@ -289,11 +327,12 @@ def build_video(
     force = force or set()
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    text = load_or_write_script(run_dir, script)
+    stages = []
+    text, stage = ensure_script(run_dir, script, scriptwriter, "script" in force)
+    stages.append(stage)
     beats = beats_for(text)
     log(f"  script   {len(text.split())} words, {len(beats)} beats")
 
-    stages = []
     specs, stage = ensure_spec(run_dir, beats, planner, "spec" in force)
     stages.append(stage)
     clips, stage = ensure_audio(run_dir, beats, speak, "audio" in force, timer)

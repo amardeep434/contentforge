@@ -231,3 +231,71 @@ def test_cleaning_keeps_the_hand_written_script(tmp_path):
     assert (run_dir / "script.txt").exists()
     assert not (run_dir / SPEC_NAME).exists()
     assert not (run_dir / "video.mp4").exists()
+
+
+# --- script generation (stage 0) --------------------------------------------
+
+def test_a_provided_script_is_used_verbatim(tmp_path):
+    from contentforge.pipeline import ensure_script
+
+    text, stage = ensure_script(tmp_path, "A fan moves air.", writer=None)
+    assert text == "A fan moves air."
+    assert "provided" in stage.detail
+
+
+def test_a_cached_script_is_reused_and_the_writer_not_called(tmp_path):
+    from contentforge.pipeline import SCRIPT_NAME, ensure_script
+
+    (tmp_path / SCRIPT_NAME).write_text("Cached narration here.\n")
+    called = []
+    text, stage = ensure_script(tmp_path, None,
+                                writer=lambda d: called.append(1) or "new")
+    assert text == "Cached narration here."
+    assert stage.skipped
+    assert called == []
+
+
+def test_the_writer_generates_when_nothing_exists(tmp_path):
+    from contentforge.pipeline import SCRIPT_NAME, ensure_script
+
+    text, stage = ensure_script(tmp_path, None,
+                                writer=lambda d: "Generated from sources [1].")
+    assert "Generated from sources" in text
+    assert "generated" in stage.detail
+    assert (tmp_path / SCRIPT_NAME).exists()   # persisted for reruns
+
+
+def test_forcing_script_regenerates_over_a_cached_one(tmp_path):
+    from contentforge.pipeline import SCRIPT_NAME, ensure_script
+
+    (tmp_path / SCRIPT_NAME).write_text("old\n")
+    text, _ = ensure_script(tmp_path, None, writer=lambda d: "fresh [1]", force=True)
+    assert text == "fresh [1]"
+
+
+def test_a_writer_that_produces_nothing_raises(tmp_path):
+    from contentforge.pipeline import ensure_script
+
+    with pytest.raises(MissingDataError, match="nothing to narrate"):
+        ensure_script(tmp_path, None, writer=lambda d: "   ")
+
+
+def test_no_script_and_no_writer_raises_with_guidance(tmp_path):
+    from contentforge.pipeline import ensure_script
+
+    with pytest.raises(MissingDataError, match="--topic"):
+        ensure_script(tmp_path, None, writer=None)
+
+
+def test_build_video_generates_a_script_when_given_a_writer(tmp_path):
+    fakes = Fakes(headings=False)
+    build_video(
+        run_dir=tmp_path / "run",
+        planner=fakes.plan, speak=fakes.speak, illustrator=fakes.draw,
+        upscaler=fakes.upscale, renderer=fakes.render, timer=fakes.timer,
+        log=lambda _: None,
+        script=None,
+        scriptwriter=lambda d: SCRIPT,
+    )
+    assert (tmp_path / "run" / "script.txt").read_text().startswith("A ceiling fan")
+    assert len(fakes.rendered[0]) == 3

@@ -303,10 +303,18 @@ def main(argv: list[str] | None = None) -> int:
         "--script-file", type=Path, default=None,
         help="narration to use; omitted means read script.txt already in the run",
     )
+    make.add_argument(
+        "--topic", default=None,
+        help="generate the script from this topic (needs --source URLs)",
+    )
+    make.add_argument(
+        "--source", action="append", default=[], metavar="URL",
+        help="a primary source to ground the generated script; repeatable",
+    )
     make.add_argument("--root", type=Path, default=Path("data/videos"))
     make.add_argument(
         "--force", action="append", default=[],
-        choices=["spec", "audio", "draw", "letter", "render", "all"],
+        choices=["script", "spec", "audio", "draw", "letter", "render", "all"],
         help="redo a stage that is already on disk; repeatable",
     )
     make.add_argument("--voice", default=None)
@@ -385,17 +393,21 @@ def main(argv: list[str] | None = None) -> int:
         from contentforge import runtime
         from contentforge.pipeline import beats_for, build_video, load_or_write_script
 
+        from contentforge.pipeline import ensure_script
+
         run_dir = args.root / args.slug
         script = args.script_file.read_text() if args.script_file else None
+        writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
 
         if args.dry_run:
-            beats = beats_for(load_or_write_script(run_dir, script))
+            text, _ = ensure_script(run_dir, script, writer)
+            beats = beats_for(text)
             print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
             for index, beat in enumerate(beats, start=1):
                 print(f"  {index:3d}  {beat[:96]}")
             return 0
 
-        stages = {"spec", "audio", "draw", "letter", "render"} if (
+        stages = {"script", "spec", "audio", "draw", "letter", "render"} if (
             "all" in args.force
         ) else set(args.force)
         video = build_video(
@@ -406,6 +418,7 @@ def main(argv: list[str] | None = None) -> int:
             upscaler=runtime.upscaler(),
             renderer=runtime.renderer(),
             script=script,
+            scriptwriter=writer,
             force=stages,
         )
         print(f"\n  {video}")

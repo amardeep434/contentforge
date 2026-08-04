@@ -62,6 +62,37 @@ def spec_planner(client=None) -> Callable[[list[str]], list]:
     return lambda beats: generate_spec(resolved, beats)
 
 
+def scriptwriter(topic: str, source_urls: list[str], client=None):
+    """A callable that writes one grounded, validated narration into a run.
+
+    Returns None when no topic is given, so `make` falls back to a hand-written
+    or cached script. When a topic IS given it refuses to proceed without
+    sources - an ungrounded script is the exact failure this project exists to
+    prevent, so the guard is here, not a warning.
+    """
+    if not topic:
+        return None
+    from contentforge.script.generate import choose_shape, generate_script
+    from contentforge.script.validate import validate_script
+    from contentforge.sourcing.fetch import fetch_source, save_sources
+
+    if not source_urls:
+        raise MissingDataError(
+            f"--topic {topic!r} needs at least one --source URL; a script "
+            "grounded in nothing is what this pipeline refuses to make"
+        )
+    resolved = client or llm_client()
+
+    def write(run_dir: Path) -> str:
+        sources = [fetch_source(url) for url in source_urls]
+        save_sources(sources, run_dir)
+        script = generate_script(resolved, topic, sources, choose_shape(topic))
+        validate_script(script, sources)   # raises on verbatim, no citation, faked credentials
+        return script
+
+    return write
+
+
 def speaker(backend: str | None = None, voice: str | None = None
             ) -> Callable[[str, Path], Path]:
     """Narrate one beat to one file.
