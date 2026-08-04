@@ -110,40 +110,68 @@ The spec stage is chunked at 20 beats per call, so a 200-beat script is ten
 calls — a few minutes through OmniRoute, 20-40 through Ollama, all of it before
 any GPU work begins.
 
-### Reaching the LLM from inside hermes
+### Reaching the LLM from inside the hermes sandbox
 
-**With OmniRoute, nothing needs changing.** It binds `0.0.0.0:20128`, so the
-docker bridge gateway reaches it directly:
+**It cannot, as the sandbox is currently built.** Measured from inside the
+running `hermes-*` container, not inferred from the host:
 
-```bash
-CONTENTFORGE_LLM_BASE_URL=http://172.17.0.1:20128/v1
+```
+direct    http://172.21.0.1:20128     URLError   (no route)
+via proxy http://172.21.0.1:20128     403
+direct    http://172.20.0.1:20128     URLError
+via proxy http://172.20.0.1:20128     403
 ```
 
-Verified reachable on `172.17.0.1:20128` from this host. Use `--network host` if
-you would rather keep the same URL as outside the container.
+Two independent reasons, both deliberate:
 
-> **`0.0.0.0` means every interface, including whatever wifi you are on, and a
-> request with no API key is currently accepted.** Anyone on the same network can
-> spend your routed providers through it. Either set an OmniRoute API key and put
-> it in `CONTENTFORGE_LLM_KEY`, or firewall the port to the bridge:
->
-> ```bash
-> sudo ufw allow in on docker0 to any port 20128
-> sudo ufw deny 20128
-> ```
+1. **The container has no default route.** It sits on `scrape-internal`, which
+   is `internal=true`; Docker installs no gateway on such a network. Its route
+   table contains its own `/16` and nothing else, so no host IP is reachable —
+   `172.17.0.1` (the default-bridge gateway) least of all, since the container
+   is not on that bridge.
+2. **All egress goes through tinyproxy, which is default-deny.** `scrape-proxy`
+   runs with `FilterDefaultDeny Yes` against a 32-entry domain whitelist. Any
+   host not on that list gets 403, and the OmniRoute host is not on it.
 
-**With Ollama it does need changing.** Ollama binds `127.0.0.1`, which inside a
-container means the container itself. Either run with `--network host`, or:
+To allow it while keeping the sandbox's audited-egress design, add the host to
+the proxy whitelist rather than attaching the container to another network:
 
-```bash
-sudo systemctl edit ollama
-#   [Service]
-#   Environment="OLLAMA_HOST=0.0.0.0:11434"
-sudo systemctl restart ollama
+```
+^172\.21\.0\.1$
 ```
 
-then use `http://172.17.0.1:11434/v1` — with the same firewall caveat, since
-Ollama has no authentication at all.
+then point the container at `http://172.21.0.1:20128/v1` — that is the
+`scrape-egress` gateway, which is the host, and `scrape-proxy` sits on that
+network so it can route there. No code change is needed: Python's `urllib`
+honours `http_proxy`, which the sandbox already sets.
+
+### What else the sandbox is missing
+
+Measured in the same container:
+
+| need | status |
+|---|---|
+| GPU (`/dev/nvidia*`) | **absent** |
+| `ffmpeg` / `ffprobe` | **absent** |
+| `generativelanguage.googleapis.com` (Gemini TTS) | **not whitelisted** |
+| `speech.platform.bing.com` (edge-tts) | whitelisted |
+| `huggingface.co`, `cdn-lfs.huggingface.co`, `us.aws.cdn.hf.co` | whitelisted |
+| `commons.wikimedia.org`, `pypi.org` | whitelisted |
+
+**So three of the five stages cannot run in the sandbox at all.** `draw` needs a
+GPU, `letter` needs one for the upscaler, and `render` needs ffmpeg. Whitelisting
+the LLM host fixes `spec` and nothing else.
+
+### The arrangement that actually works
+
+Run the pipeline **on the host**, and let hermes trigger it rather than contain
+it. The host already has the GPU, ffmpeg, the fonts, the upscaler and OmniRoute
+on loopback — `pipeline doctor` passes there today.
+
+If the pipeline must genuinely run inside a container, it needs its own, built
+for the job: `--gpus all`, ffmpeg installed, the HF cache mounted, and either
+`--network host` or a bridge network — not the scrape sandbox, whose whole
+purpose is to deny exactly this.
 
 ---
 
@@ -247,15 +275,26 @@ or checklist item is too long. Shorten it in `spec.json` and rerun `letter`.
 
 ## 6. Running it under hermes
 
-Nothing is interactive and nothing prompts, so a container needs only:
+**The pipeline does not run inside the hermes scrape sandbox.** That container
+has no GPU, no ffmpeg, no route to the host, and a default-deny egress proxy —
+see §2 for the measurements. Three of the five stages cannot execute there.
+
+The working arrangement is that hermes **triggers** `pipeline make` on the host,
+where the GPU, ffmpeg, the fonts, the upscaler and OmniRoute all already are.
+Nothing in the pipeline is interactive and nothing prompts, so it is safe to
+drive unattended.
+
+If you do build a dedicated container for it, it needs:
 
 - the environment variables from §2
 - `--gpus all` and the Hugging Face cache mounted
   ([local-image-generation.md](local-image-generation.md) §6)
 - `ffmpeg` in the image
 - the fonts and the upscaler on a persistent volume, or baked into the image
+- a network that reaches OmniRoute — `--network host` is simplest
 
-`pipeline doctor` is the first thing to run inside the container when something
-misbehaves. It distinguishes "the GPU was not passed through" from "the fonts
-are not mounted" from "the code is wrong", which otherwise all present as the
-same failed render.
+`pipeline doctor` is the first thing to run inside any container when something
+misbehaves. It now probes the LLM endpoint rather than merely checking that a
+variable is set, so it distinguishes "the GPU was not passed through" from "the
+fonts are not mounted" from "the LLM URL points at the dashboard port" — which
+otherwise all present as the same failed render.
