@@ -37,7 +37,9 @@ GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-preview-tts"
-DEFAULT_GEMINI_VOICE = "Charon"
+#: Chosen by the operator from six candidates reading the same passage at the
+#: same pace, so the comparison was timbre and nothing else.
+DEFAULT_GEMINI_VOICE = "Iapetus"
 
 #: Gemini returns raw little-endian signed 16-bit PCM at 24 kHz, mono, with no
 #: container. ffmpeg and every player need a WAV header wrapped around it.

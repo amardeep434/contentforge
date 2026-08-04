@@ -66,7 +66,7 @@ def test_lettering_is_upper_cased_to_match_the_reference():
 
 def test_a_heading_too_long_for_the_frame_raises():
     with pytest.raises(MissingDataError, match="will not fit"):
-        parse_spec(json.dumps([entry(heading="one two three four")]), ["one."])
+        parse_spec(json.dumps([entry(heading="one two three four five")]), ["one."])
 
 
 def test_too_many_checklist_items_raises():
@@ -123,3 +123,96 @@ def test_generation_asks_for_one_entry_per_beat():
     specs = generate_spec(FakeClient(), ["one.", "two."])
     assert len(specs) == 2
     assert "exactly 2 JSON objects" in asked["user"]
+
+
+# --- junk filtering ---------------------------------------------------------
+
+def test_punctuation_only_checklist_items_are_dropped():
+    # gemma4 returned the literal string "[]" as a checklist item, which would
+    # have been drawn on the frame as a ticked line reading "[]".
+    specs = parse_spec(
+        json.dumps([entry(checklist=["[]", "-", "REAL ITEM", "..."])]), ["one."]
+    )
+    assert specs[0].checklist == ("REAL ITEM",)
+
+
+def test_a_beat_whose_only_checklist_item_was_junk_has_no_lettering():
+    specs = parse_spec(json.dumps([entry(checklist=["[]"])]), ["one."])
+    assert not specs[0].has_lettering
+
+
+# --- chunking ---------------------------------------------------------------
+
+def test_a_long_script_is_planned_in_chunks():
+    # One call for 200 beats overruns both the token budget and any sane HTTP
+    # timeout, and one malformed response would cost the whole script.
+    sizes = []
+
+    class FakeClient:
+        def complete(self, system, user, max_tokens=0):
+            count = int(user.split()[0])
+            sizes.append(count)
+            return json.dumps([entry(f"subject {n}") for n in range(count)])
+
+    beats = [f"Sentence number {n} goes here." for n in range(45)]
+    specs = generate_spec(FakeClient(), beats, chunk=20)
+    assert len(specs) == 45
+    assert sizes == [20, 20, 5]
+
+
+def test_each_chunk_is_told_where_it_sits_in_the_script():
+    seen = []
+
+    class FakeClient:
+        def complete(self, system, user, max_tokens=0):
+            seen.append(user)
+            count = int(user.split()[0])
+            return json.dumps([entry() for _ in range(count)])
+
+    generate_spec(FakeClient(), [f"Beat {n} here." for n in range(30)], chunk=20)
+    assert "beats 1-20 of 30" in seen[0]
+    assert "beats 21-30 of 30" in seen[1]
+
+
+def test_chunked_specs_stay_paired_with_their_own_beats():
+    class FakeClient:
+        def complete(self, system, user, max_tokens=0):
+            count = int(user.split()[0])
+            return json.dumps([entry() for _ in range(count)])
+
+    beats = [f"Beat {n} here." for n in range(25)]
+    specs = generate_spec(FakeClient(), beats, chunk=20)
+    assert [s.text for s in specs] == beats
+
+
+# --- resilience -------------------------------------------------------------
+
+def test_a_chunk_is_retried_when_the_model_breaks_a_stated_constraint():
+    # auto/best-free returned the heading "EMPTY ROOM, WASTED MONEY" and a
+    # three-word cap failed the whole 20-beat chunk over that one entry.
+    calls = []
+
+    class FlakyClient:
+        def complete(self, system, user, max_tokens=0):
+            calls.append(1)
+            if len(calls) == 1:
+                return json.dumps([entry(heading="one two three four five")])
+            return json.dumps([entry(heading="fine")])
+
+    specs = generate_spec(FlakyClient(), ["one."])
+    assert specs[0].heading == "FINE"
+    assert len(calls) == 2
+
+
+def test_a_chunk_that_keeps_failing_reports_what_was_wrong():
+    class BrokenClient:
+        def complete(self, system, user, max_tokens=0):
+            return json.dumps([entry(heading="one two three four five")])
+
+    with pytest.raises(MissingDataError, match="will not fit"):
+        generate_spec(BrokenClient(), ["one."])
+
+
+def test_a_four_word_heading_is_accepted():
+    specs = parse_spec(json.dumps([entry(heading="empty room, wasted money")]), ["one."])
+    assert specs[0].heading == "EMPTY ROOM, WASTED MONEY"

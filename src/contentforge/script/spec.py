@@ -24,8 +24,12 @@ from contentforge.providers.llm import LLMClient
 #: More than this on one frame and it stops reading as a glance-able point.
 MAX_CHECKLIST_ITEMS = 4
 
-#: Long headings wrap badly at 92px against a 1920px frame.
-MAX_HEADING_WORDS = 3
+#: Each heading word gets its own line, so this is a line count, not a width.
+#: Four, not three: a real model returned "EMPTY ROOM, WASTED MONEY" and a
+#: three-word cap failed the whole 20-beat chunk over one heading. The binding
+#: constraint is the sheet's measured width, which `sheet.place` checks and
+#: falls back from gracefully - this is only a sanity bound.
+MAX_HEADING_WORDS = 4
 
 SYSTEM = """You plan the visuals for a narrated explainer video in a hand-drawn
 line-art style: bold black ink on plain cream, no photographs, no 3D.
@@ -34,7 +38,9 @@ For each narration beat you return:
 - "subject": what to draw, as a concrete noun phrase. One scene, plainly
   describable. Never abstract ("the concept of risk") - draw the object that
   stands for it ("a wooden chair with one leg sawn short").
-- "heading": two or three words in caps that name the point, or "" for none.
+- "heading": at most four words in caps that name the point, or "" for none.
+  Each word is drawn on its own line, so five words is five lines and will not
+  fit. Count the words before you answer.
 - "checklist": up to four very short ticked items, or [] for none.
 
 Rules:
@@ -63,6 +69,16 @@ class BeatSpec:
     @property
     def has_lettering(self) -> bool:
         return bool(self.heading or self.checklist)
+
+
+#: Punctuation-only junk a model emits when it has nothing to put in a list.
+#: Observed: gemma4 returned the literal string "[]" as a checklist item, which
+#: would have been drawn on the frame as a ticked line reading "[]".
+_PUNCTUATION_ONLY = frozenset("[]{}()-–—_.,:;\"' \t")
+
+
+def _is_real_item(text: str) -> bool:
+    return bool(text) and not set(text) <= _PUNCTUATION_ONLY
 
 
 def _clean(raw: str) -> str:
@@ -113,7 +129,10 @@ def parse_spec(raw: str, beats: list[str]) -> list[BeatSpec]:
         items = entry.get("checklist") or []
         if not isinstance(items, list):
             raise MissingDataError(f"checklist in entry {index} is not a list")
-        checklist = tuple(str(item).strip().upper() for item in items if str(item).strip())
+        checklist = tuple(
+            cleaned for cleaned in (str(item).strip().upper() for item in items)
+            if _is_real_item(cleaned)
+        )
         if len(checklist) > MAX_CHECKLIST_ITEMS:
             raise MissingDataError(
                 f"entry {index} has {len(checklist)} checklist items; more than "
@@ -126,16 +145,67 @@ def parse_spec(raw: str, beats: list[str]) -> list[BeatSpec]:
     return specs
 
 
-def generate_spec(client: LLMClient, beats: list[str]) -> list[BeatSpec]:
-    """One call for the whole script, so the model can avoid repeating itself."""
+#: Beats per call. One call for a whole 200-beat script overruns both the token
+#: budget and any sane HTTP timeout, and a single malformed response would then
+#: cost the entire script. Small enough to come back quickly, large enough that
+#: the model still sees its neighbours and can avoid drawing the same thing
+#: twice in a row.
+CHUNK = 20
+
+#: A JSON object per beat runs 60-90 tokens. This leaves generous headroom for a
+#: full chunk plus whatever preamble the model insists on.
+MAX_TOKENS = 4000
+
+
+def generate_chunk(client: LLMClient, beats: list[str], offset: int = 0,
+                   total: int | None = None, attempts: int = 2) -> list[BeatSpec]:
+    """Visuals for one run of consecutive beats.
+
+    Retried once, because the failure mode is a model breaking one stated
+    constraint in one entry - an over-long heading, a checklist of five - and
+    the whole chunk of twenty beats should not be lost to it. A second sample
+    usually complies; if it does not, the error names what was wrong.
+    """
     if not beats:
         raise MissingDataError("no beats to specify visuals for")
-    numbered = "\n\n".join(f"{n}. {beat}" for n, beat in enumerate(beats, start=1))
-    user = (
-        f"{len(beats)} narration beats follow. Return exactly {len(beats)} JSON "
-        f"objects, in the same order.\n\n{numbered}"
+    numbered = "\n\n".join(
+        f"{offset + n}. {beat}" for n, beat in enumerate(beats, start=1)
     )
-    return parse_spec(client.complete(SYSTEM, user, max_tokens=8000), beats)
+    scope = (
+        f" (beats {offset + 1}-{offset + len(beats)} of {total})" if total else ""
+    )
+    user = (
+        f"{len(beats)} narration beats follow{scope}. Return exactly "
+        f"{len(beats)} JSON objects, in the same order.\n\n{numbered}"
+    )
+    last: MissingDataError | None = None
+    for _ in range(max(1, attempts)):
+        try:
+            return parse_spec(client.complete(SYSTEM, user, max_tokens=MAX_TOKENS), beats)
+        except MissingDataError as error:
+            last = error
+    raise last
+
+
+def generate_spec(client: LLMClient, beats: list[str], chunk: int = CHUNK,
+                  log=None) -> list[BeatSpec]:
+    """Visuals for every beat, a chunk at a time.
+
+    Subjects already used are fed forward so the model does not restart its
+    imagination at every chunk boundary - a video where the same picture returns
+    every twenty shots looks exactly as automated as it is.
+    """
+    if not beats:
+        raise MissingDataError("no beats to specify visuals for")
+
+    specs: list[BeatSpec] = []
+    for start in range(0, len(beats), chunk):
+        window = beats[start : start + chunk]
+        made = generate_chunk(client, window, offset=start, total=len(beats))
+        specs.extend(made)
+        if log:
+            log(f"    spec {len(specs)}/{len(beats)} beats")
+    return specs
 
 
 #: Sized against the reference frame, where the heading is about a fifth of the

@@ -16,11 +16,20 @@ from typing import Callable
 
 from contentforge.errors import MissingDataError
 
-#: Gemini, not edge. Every edge sample carried the same synthetic quality that
-#: a listener rejected as obviously synthetic (C-049, six voices, all refused).
-#: Gemini's tier is materially better and equally free. Both
-#: are free. Gemini needs a key and a network, which is the cost of the change.
+#: Gemini, not edge: a listener rejected all six edge-tts candidates as obviously
+#: synthetic (C-049). Gemini's tier is materially better and equally free. The
+#: cost of the change is that it needs a key and a network.
 DEFAULT_VOICE_BACKEND = "gemini"
+
+#: OmniRoute's OpenAI-compatible API. Note the port: 37777 is its dashboard,
+#: 20128 is the API, and hitting the first gives 404s that look like the wrong
+#: path rather than the wrong port. It binds 0.0.0.0, so the same host works
+#: from inside a container via the docker bridge gateway.
+DEFAULT_LLM_BASE_URL = "http://127.0.0.1:20128/v1"
+
+#: Free, and measured at 8.6s for three beats against 74s for the best local
+#: Ollama model. Routing is OmniRoute's job; the pipeline just names a combo.
+DEFAULT_LLM_MODEL = "auto/best-free"
 
 ENV_LLM_BASE_URL = "CONTENTFORGE_LLM_BASE_URL"
 ENV_LLM_KEY = "CONTENTFORGE_LLM_KEY"
@@ -36,13 +45,8 @@ def llm_client():
     """The chat client, from environment configuration."""
     from contentforge.providers.llm import LLMClient
 
-    base_url = os.environ.get(ENV_LLM_BASE_URL, "")
-    model = os.environ.get(ENV_LLM_MODEL, "")
-    if not base_url or not model:
-        raise MissingDataError(
-            f"{ENV_LLM_BASE_URL} and {ENV_LLM_MODEL} must be set to plan visuals. "
-            "See docs/setup/running-the-pipeline.md"
-        )
+    base_url = os.environ.get(ENV_LLM_BASE_URL) or DEFAULT_LLM_BASE_URL
+    model = os.environ.get(ENV_LLM_MODEL) or DEFAULT_LLM_MODEL
     return LLMClient(
         base_url=base_url,
         api_key=os.environ.get(ENV_LLM_KEY, ""),
@@ -62,9 +66,8 @@ def speaker(backend: str | None = None, voice: str | None = None
             ) -> Callable[[str, Path], Path]:
     """Narrate one beat to one file.
 
-    edge is the default: free, offline-capable, and measured at the reference
-    channel's 142 wpm. Gemini is available for a different timbre and costs a
-    free-tier key.
+    Gemini is the default; edge remains available and needs no key, at the cost
+    of a narrator a listener already rejected as synthetic (C-049).
     """
     chosen = (backend or os.environ.get(ENV_VOICE_BACKEND, DEFAULT_VOICE_BACKEND)).lower()
 
@@ -138,6 +141,26 @@ def renderer() -> Callable:
     return render
 
 
+def _llm_report() -> str:
+    """Whether the configured endpoint actually answers, not just whether it is set.
+
+    A base URL in the environment proves nothing - the most common failure is a
+    correct-looking URL pointing at OmniRoute's dashboard port instead of its
+    API port, which 404s at request time rather than at startup.
+    """
+    import json
+    import urllib.request
+
+    base = os.environ.get(ENV_LLM_BASE_URL) or DEFAULT_LLM_BASE_URL
+    model = os.environ.get(ENV_LLM_MODEL) or DEFAULT_LLM_MODEL
+    try:
+        with urllib.request.urlopen(base.rstrip("/") + "/models", timeout=5) as reply:
+            count = len(json.loads(reply.read()).get("data", []))
+        return f"{base} reachable, {count} models, using {model}"
+    except Exception as error:
+        return f"{base} UNREACHABLE ({type(error).__name__}) - see docs/setup/running-the-pipeline.md"
+
+
 def report() -> str:
     """What this machine can actually run, for a setup check."""
     from contentforge.visuals.illustrate import UPSCALER, gpu_report
@@ -155,6 +178,5 @@ def report() -> str:
         from shutil import which
 
         lines.append(f"{tool:<10}{which(tool) or 'MISSING - apt install ffmpeg'}")
-    configured = all(os.environ.get(name) for name in (ENV_LLM_BASE_URL, ENV_LLM_MODEL))
-    lines.append(f"llm       {'configured' if configured else 'NOT configured'}")
+    lines.append(f"llm       {_llm_report()}")
     return "\n".join(lines)

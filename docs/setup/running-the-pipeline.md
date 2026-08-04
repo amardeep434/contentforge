@@ -48,16 +48,16 @@ run unattended. Add these to your `.env`:
 
 ```bash
 # Planning the visuals. Any OpenAI-compatible endpoint.
-CONTENTFORGE_LLM_BASE_URL=http://localhost:8080/v1
-CONTENTFORGE_LLM_MODEL=your-model-name
+CONTENTFORGE_LLM_BASE_URL=http://127.0.0.1:20128/v1
+CONTENTFORGE_LLM_MODEL=auto/best-free
 CONTENTFORGE_LLM_KEY=                    # blank is fine for a local server
 
 # Optional - these are the defaults.
-CONTENTFORGE_VOICE_BACKEND=edge          # or: gemini
-CONTENTFORGE_VOICE=en-GB-RyanNeural
-CONTENTFORGE_IMAGE_MODEL=stabilityai/sd-turbo
-CONTENTFORGE_IMAGE_WIDTH=768
-CONTENTFORGE_IMAGE_HEIGHT=432
+CONTENTFORGE_VOICE_BACKEND=gemini        # or: edge
+CONTENTFORGE_VOICE=Iapetus
+CONTENTFORGE_IMAGE_MODEL=stabilityai/sdxl-turbo
+CONTENTFORGE_IMAGE_WIDTH=768             # generation size, NOT output size
+CONTENTFORGE_IMAGE_HEIGHT=432            # output is always 1920x1080
 ```
 
 Load them into your shell before running anything:
@@ -66,8 +66,84 @@ Load them into your shell before running anything:
 set -a && . ./.env && set +a
 ```
 
-`GEMINI_API_KEY` is only needed if you set the voice backend to `gemini`. The
-default, `edge`, is free and needs no key.
+`GEMINI_API_KEY` is required, because `gemini` is the default voice backend —
+six edge-tts voices were rejected by a listener as obviously synthetic (C-049).
+Set `CONTENTFORGE_VOICE_BACKEND=edge` if you would rather not depend on a key.
+
+**`CONTENTFORGE_IMAGE_WIDTH` is the size frames are drawn at, not the size they
+come out at.** Output is always 1920x1080. Frames are generated at 768x432
+because 1024x576 runs a 6 GB card out of memory, then upscaled 4x and fitted to
+1080p.
+
+### Choosing an LLM
+
+**OmniRoute is the default.** It already runs here, it speaks the OpenAI API, and
+one base URL covers both this machine and hermes. Its dashboard is on **37777**;
+its API is on **20128** — a different port, which is the thing that wastes an
+afternoon if you assume otherwise.
+
+```bash
+omniroute health                 # is the server up
+curl -s localhost:20128/v1/models | head    # what it routes to (219 models here)
+```
+
+Measured on this machine, planning three beats end to end:
+
+| endpoint | model | time |
+|---|---|---|
+| OmniRoute | `auto/fast` | **5.4 s** |
+| OmniRoute | `auto/cheap` | 5.6 s |
+| OmniRoute | `auto/best-free` | 8.6 s |
+| Ollama | `gemma4:latest` | 74 s |
+| Ollama | `qwen3.6:35b-a3b` | timed out at 180 s |
+| Ollama | `qwen3.5:latest-32k` | timed out at 110 s |
+
+`auto/best-free` is the default: free, and 9x faster than the best local option.
+
+**If you use Ollama directly instead**, pick a model that does not think out
+loud. The qwen builds emit a long chain of thought before answering, which is
+wasted on a task whose output is a JSON array — that is why they time out above.
+Ollama serves an OpenAI-compatible API at `/v1`, so it needs no adapter:
+`http://127.0.0.1:11434/v1`.
+
+The spec stage is chunked at 20 beats per call, so a 200-beat script is ten
+calls — a few minutes through OmniRoute, 20-40 through Ollama, all of it before
+any GPU work begins.
+
+### Reaching the LLM from inside hermes
+
+**With OmniRoute, nothing needs changing.** It binds `0.0.0.0:20128`, so the
+docker bridge gateway reaches it directly:
+
+```bash
+CONTENTFORGE_LLM_BASE_URL=http://172.17.0.1:20128/v1
+```
+
+Verified reachable on `172.17.0.1:20128` from this host. Use `--network host` if
+you would rather keep the same URL as outside the container.
+
+> **`0.0.0.0` means every interface, including whatever wifi you are on, and a
+> request with no API key is currently accepted.** Anyone on the same network can
+> spend your routed providers through it. Either set an OmniRoute API key and put
+> it in `CONTENTFORGE_LLM_KEY`, or firewall the port to the bridge:
+>
+> ```bash
+> sudo ufw allow in on docker0 to any port 20128
+> sudo ufw deny 20128
+> ```
+
+**With Ollama it does need changing.** Ollama binds `127.0.0.1`, which inside a
+container means the container itself. Either run with `--network host`, or:
+
+```bash
+sudo systemctl edit ollama
+#   [Service]
+#   Environment="OLLAMA_HOST=0.0.0.0:11434"
+sudo systemctl restart ollama
+```
+
+then use `http://172.17.0.1:11434/v1` — with the same firewall caveat, since
+Ollama has no authentication at all.
 
 ---
 
