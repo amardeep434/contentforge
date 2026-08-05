@@ -314,7 +314,8 @@ def main(argv: list[str] | None = None) -> int:
     make.add_argument("--root", type=Path, default=Path("data/videos"))
     make.add_argument(
         "--force", action="append", default=[],
-        choices=["script", "spec", "audio", "draw", "letter", "render", "all"],
+        choices=["script", "spec", "audio", "draw", "letter", "render",
+                 "metadata", "thumbnail", "all"],
         help="redo a stage that is already on disk; repeatable",
     )
     make.add_argument("--voice", default=None)

@@ -42,12 +42,20 @@ def test_an_empty_headline_raises(tmp_path):
         compose(hero(tmp_path), "   ", tmp_path / "t.png")
 
 
-def test_too_many_words_raises(tmp_path):
-    with pytest.raises(MissingDataError, match="at a glance"):
-        compose(hero(tmp_path), "one two three four five six", tmp_path / "t.png")
+def test_too_many_words_is_truncated_not_raised(tmp_path):
+    # A finished render must not die at the last stage; the metadata stage keeps
+    # the hook short, and this is the backstop.
+    out = compose(hero(tmp_path), "one two three four five six", tmp_path / "t.png")
+    assert Image.open(out).size == (WIDTH, HEIGHT)
 
 
 def test_a_long_headline_still_produces_a_valid_image(tmp_path):
     # Five words wraps to two lines and must still fit.
     out = compose(hero(tmp_path), "Why Your Fan Wastes Money", tmp_path / "t.png")
+    assert Image.open(out).size == (WIDTH, HEIGHT)
+
+
+def test_an_overlong_headline_is_truncated_not_crashed(tmp_path):
+    # A finished render must never die at the last stage over a long headline.
+    out = compose(hero(tmp_path), "one two three four five six seven", tmp_path / "t.png")
     assert Image.open(out).size == (WIDTH, HEIGHT)

@@ -107,3 +107,24 @@ def test_generation_refuses_an_empty_script():
 
     with pytest.raises(MissingDataError, match="no script"):
         generate_metadata(FakeClient(), "   ")
+
+
+def test_a_short_thumbnail_headline_is_produced():
+    from contentforge.publish.metadata import MAX_THUMB_WORDS
+    raw = json.dumps({"title": "The Economics of Owning a Gym", "description": "x.",
+                      "tags": ["a"], "thumb_headline": "IT IS NOT A GYM"})
+    meta = parse_metadata(raw)
+    assert len(meta.thumb_headline.split()) <= MAX_THUMB_WORDS
+
+
+def test_a_missing_thumb_headline_falls_back_to_the_title():
+    meta = parse_metadata(payload(title="The Economics of Owning a Gym"))
+    assert meta.thumb_headline                      # never empty
+    assert len(meta.thumb_headline.split()) <= 4
+
+
+def test_an_overlong_thumb_headline_is_replaced_not_kept():
+    raw = json.dumps({"title": "Short Title Here", "description": "x.", "tags": ["a"],
+                      "thumb_headline": "one two three four five six seven"})
+    meta = parse_metadata(raw)
+    assert len(meta.thumb_headline.split()) <= 4

@@ -29,6 +29,13 @@ publish = [
     "google-auth>=2.0",
     "google-auth-oauthlib>=1.0",
 ]
+# Local, offline narration via OmniVoice voice cloning. Needs a GPU. torchaudio
+# must match the installed torch (see docs/setup/local-voice.md). WeTextProcessing
+# is optional - it expands numbers for narration and is used when present.
+voice = [
+    "omnivoice>=0.2",
+    "soundfile>=0.12",
+]
 
 [project.scripts]
 pipeline = "contentforge.cli:main"

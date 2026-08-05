@@ -346,6 +346,7 @@ def _metadata_to_json(meta) -> str:
         "description": meta.description,
         "tags": list(meta.tags),
         "category_id": meta.category_id,
+        "thumb_headline": meta.thumb_headline,
     }, indent=2)
 
 
@@ -364,6 +365,7 @@ def load_metadata(run_dir: Path):
         title=data["title"], description=data["description"],
         tags=tuple(data.get("tags", ())),
         category_id=data.get("category_id", "27"),
+        thumb_headline=data.get("thumb_headline", ""),
     )
 
 
@@ -434,6 +436,10 @@ def build_video(
     stages.append(stage)
     clips, stage = ensure_audio(run_dir, beats, speak, "audio" in force, timer)
     stages.append(stage)
+    # Free any GPU the voice backend holds before image generation loads its own
+    # model - on a 6 GB card the two cannot be resident at once.
+    if hasattr(speak, "close"):
+        speak.close()
     raws, stage = ensure_illustrations(run_dir, specs, illustrator, "draw" in force)
     stages.append(stage)
     frames, stage = ensure_frames(run_dir, specs, raws, upscaler, "letter" in force)
@@ -446,7 +452,8 @@ def build_video(
         meta, stage = ensure_metadata(run_dir, text, sources, metadata_writer,
                                       "metadata" in force)
         stages.append(stage)
-        _, stage = ensure_thumbnail(run_dir, frames, headline or meta.title,
+        _, stage = ensure_thumbnail(run_dir, frames,
+                                    headline or meta.thumb_headline or meta.title,
                                     "thumbnail" in force)
         stages.append(stage)
 

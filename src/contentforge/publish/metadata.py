@@ -48,11 +48,19 @@ Return a JSON object with:
   paragraphs. Do not invent facts not in the script. Never claim personal
   experience.
 - "tags": 8 to 15 short lowercase search phrases, as a JSON array.
+- "thumb_headline": TWO to FOUR words for the thumbnail - the blunt hook, not
+  the title. e.g. "WHERE THE MONEY GOES", "IT IS NOT A GYM". Never more than
+  four words; it has to be read at a glance.
 
 Return only the JSON object. No prose, no code fence.
 """
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+#: A thumbnail hook longer than this cannot be read at a glance; kept in sync
+#: with the thumbnail renderer's own limit.
+MAX_THUMB_WORDS = 4
 
 
 @dataclass(frozen=True)
@@ -63,6 +71,7 @@ class Metadata:
     description: str
     tags: tuple[str, ...] = field(default_factory=tuple)
     category_id: str = DEFAULT_CATEGORY
+    thumb_headline: str = ""
 
 
 def _clean(raw: str) -> str:
@@ -123,7 +132,21 @@ def parse_metadata(raw: str, sources: list | None = None) -> Metadata:
     if not isinstance(tags, list):
         raise MissingDataError("tags must be a JSON array")
 
-    return Metadata(title=title, description=description, tags=_clamp_tags(tags))
+    return Metadata(title=title, description=description, tags=_clamp_tags(tags),
+                    thumb_headline=_thumb_headline(data.get("thumb_headline"), title))
+
+
+def _thumb_headline(raw, title: str) -> str:
+    """A short thumbnail hook, always at most MAX_THUMB_WORDS words.
+
+    Falls back to the first few words of the title when the model omits it or
+    over-runs, so the thumbnail stage never receives an unusable headline and
+    never crashes a finished render over it.
+    """
+    words = " ".join(str(raw or "").split()).split()
+    if not words or len(words) > MAX_THUMB_WORDS:
+        words = title.split()[:MAX_THUMB_WORDS]
+    return " ".join(words)
 
 
 def with_sources(description: str, sources: list) -> str:

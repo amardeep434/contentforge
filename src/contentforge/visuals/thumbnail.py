@@ -79,10 +79,11 @@ def compose(hero: Path, headline: str, out_path: Path,
     if not words:
         raise MissingDataError("a thumbnail needs a headline")
     if len(words) > MAX_WORDS:
-        raise MissingDataError(
-            f"thumbnail headline is {len(words)} words; more than {MAX_WORDS} "
-            "cannot be read at a glance"
-        )
+        # Truncate rather than raise: a headline that is a few words too long
+        # must never kill a render that is otherwise finished. The metadata
+        # stage should already have produced a short hook; this is the backstop.
+        words = words[:MAX_WORDS]
+        headline = " ".join(words)
 
     image = _fill(Image.open(hero).convert("RGB"))
     draw = ImageDraw.Draw(image)

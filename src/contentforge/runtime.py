@@ -16,10 +16,12 @@ from typing import Callable
 
 from contentforge.errors import MissingDataError
 
-#: Gemini, not edge: a listener rejected all six edge-tts candidates as obviously
-#: synthetic (C-049). Gemini's tier is materially better and equally free. The
-#: cost of the change is that it needs a key and a network.
-DEFAULT_VOICE_BACKEND = "gemini"
+#: OmniVoice, local and offline. Gemini was the choice until Google restricted
+#: the account to AQ-prefix keys its own API rejects (401, unresolved Google-side
+#: regression). OmniVoice clones the exact voice we selected (Iapetus) from a
+#: reference clip, on the GPU, with no key and no network - which fits the
+#: offline-first goal Gemini never did. edge and gemini remain selectable.
+DEFAULT_VOICE_BACKEND = "omnivoice"
 
 #: OmniRoute's OpenAI-compatible API. Both the API and the dashboard are on
 #: 20128 - the API at /v1, the dashboard at /. (37777 is unrelated; another
@@ -36,6 +38,7 @@ ENV_LLM_KEY = "CONTENTFORGE_LLM_KEY"
 ENV_LLM_MODEL = "CONTENTFORGE_LLM_MODEL"
 ENV_VOICE_BACKEND = "CONTENTFORGE_VOICE_BACKEND"
 ENV_VOICE = "CONTENTFORGE_VOICE"
+ENV_VOICE_REFERENCE = "CONTENTFORGE_VOICE_REFERENCE"
 ENV_IMAGE_MODEL = "CONTENTFORGE_IMAGE_MODEL"
 ENV_IMAGE_WIDTH = "CONTENTFORGE_IMAGE_WIDTH"
 ENV_IMAGE_HEIGHT = "CONTENTFORGE_IMAGE_HEIGHT"
@@ -101,14 +104,60 @@ def metadata_writer(client=None):
     return lambda script, sources=None: generate_metadata(resolved, script, sources)
 
 
+class _GpuSpeaker:
+    """A voice backend that holds a GPU model and can free it between stages.
+
+    On a 6 GB card the voice model and the diffusion model cannot both be
+    resident - loading sdxl-turbo for the draw stage while OmniVoice is still in
+    VRAM is an out-of-memory crash. The pipeline calls `close()` after the audio
+    stage, which drops the model and empties the CUDA cache so the GPU is free
+    for image generation.
+    """
+
+    def __init__(self, backend, reference: Path):
+        self._backend = backend
+        self._reference = reference
+        self._model = None
+
+    def __call__(self, text: str, path: Path) -> Path:
+        if self._model is None:
+            self._model = self._backend.load_model()
+        return self._backend.synthesise(
+            self._model, text, path, self._reference,
+            self._backend.DEFAULT_REFERENCE_TEXT,
+        )
+
+    def close(self) -> None:
+        if self._model is None:
+            return
+        self._model = None
+        try:
+            import gc
+
+            import torch
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+
 def speaker(backend: str | None = None, voice: str | None = None
             ) -> Callable[[str, Path], Path]:
     """Narrate one beat to one file.
 
-    Gemini is the default; edge remains available and needs no key, at the cost
-    of a narrator a listener already rejected as synthetic (C-049).
+    OmniVoice is the default: local, no key, cloning the selected voice. edge
+    (free, no key, more synthetic) and gemini (blocked by Google's AQ-key
+    regression) remain selectable.
     """
     chosen = (backend or os.environ.get(ENV_VOICE_BACKEND, DEFAULT_VOICE_BACKEND)).lower()
+
+    if chosen == "omnivoice":
+        from contentforge.voice import omnivoice_backend as ov
+
+        reference = Path(os.environ.get(ENV_VOICE_REFERENCE, str(ov.DEFAULT_REFERENCE)))
+        return _GpuSpeaker(ov, reference)
 
     if chosen == "edge":
         from contentforge.voice.speak import DEFAULT_VOICE, synthesise
