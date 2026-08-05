@@ -220,7 +220,8 @@ data/videos/ceiling-fans/
   video.mp4
   subtitles.srt   timed captions, from the same shot timing
   subtitles.vtt
-  thumbnail.png   built at publish time, from the first frame
+  metadata.json   title, description, tags — review before publishing
+  thumbnail.png   1280x720, built from the first finished frame
   published.json  written after a successful upload
 ```
 
@@ -240,7 +241,7 @@ pipeline make ceiling-fans --force draw --force letter
 pipeline make ceiling-fans --force all
 ```
 
-Stage names: `script`, `spec`, `audio`, `draw`, `letter`, `render`.
+Stage names: `script`, `spec`, `audio`, `draw`, `letter`, `render`, `metadata`, `thumbnail`.
 
 **Editing `spec.json` by hand is expected.** It is the cheapest place to fix a
 video: change a subject or a heading, then `--force draw --force letter --force

@@ -349,3 +349,67 @@ def test_a_checklist_beat_still_uses_the_sheet(tmp_path):
     finally:
         sheet.draw = original
     assert drawn["sheet"] is True
+
+
+# --- metadata + thumbnail are made by `make`, reviewable before publish ------
+
+def _meta():
+    from contentforge.publish.metadata import Metadata
+    return Metadata(title="How Fans Work", description="They move air.",
+                    tags=("fans", "cooling"))
+
+
+def test_make_writes_metadata_and_thumbnail_for_review(tmp_path):
+    from contentforge.pipeline import METADATA_NAME, THUMBNAIL_NAME
+    fakes = Fakes(headings=False)
+    build(tmp_path, fakes, metadata_writer=lambda script, sources: _meta())
+    run = tmp_path / "run"
+    assert (run / METADATA_NAME).exists()
+    assert (run / THUMBNAIL_NAME).exists()      # a real 1280x720 png
+    from PIL import Image
+    assert Image.open(run / THUMBNAIL_NAME).size == (1280, 720)
+
+
+def test_metadata_round_trips_through_disk(tmp_path):
+    from contentforge.pipeline import load_metadata
+    build(tmp_path, Fakes(headings=False),
+          metadata_writer=lambda script, sources: _meta())
+    meta = load_metadata(tmp_path / "run")
+    assert meta.title == "How Fans Work"
+    assert meta.tags == ("fans", "cooling")
+
+
+def test_publish_side_load_metadata_missing_raises(tmp_path):
+    from contentforge.pipeline import load_metadata
+    with pytest.raises(MissingDataError, match="run .pipeline make"):
+        load_metadata(tmp_path)
+
+
+def test_the_metadata_writer_receives_the_script(tmp_path):
+    seen = {}
+    def writer(script, sources):
+        seen["script"] = script
+        return _meta()
+    build(tmp_path, Fakes(headings=False), metadata_writer=writer)
+    assert seen["script"].startswith("A ceiling fan")
+
+
+def test_metadata_and_thumbnail_are_cached_on_a_second_run(tmp_path):
+    calls = []
+    def writer(script, sources):
+        calls.append(1)
+        return _meta()
+    build(tmp_path, Fakes(headings=False), metadata_writer=writer)
+    build(tmp_path, Fakes(headings=False), script=None, metadata_writer=writer)
+    assert len(calls) == 1          # not regenerated on the second run
+
+
+def test_forcing_metadata_regenerates_it(tmp_path):
+    calls = []
+    def writer(script, sources):
+        calls.append(1)
+        return _meta()
+    build(tmp_path, Fakes(headings=False), metadata_writer=writer)
+    build(tmp_path, Fakes(headings=False), script=None, metadata_writer=writer,
+          force={"metadata"})
+    assert len(calls) == 2

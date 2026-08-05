@@ -323,6 +323,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     make.add_argument("--model", default=None, help="diffusion model")
     make.add_argument(
+        "--headline", default=None,
+        help="thumbnail text; defaults to the generated title",
+    )
+    make.add_argument(
         "--dry-run", action="store_true",
         help="split into beats and report the plan without generating anything",
     )
@@ -432,9 +436,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {index:3d}  {beat[:96]}")
             return 0
 
-        stages = {"script", "spec", "audio", "draw", "letter", "render"} if (
-            "all" in args.force
-        ) else set(args.force)
+        all_stages = {"script", "spec", "audio", "draw", "letter", "render",
+                      "metadata", "thumbnail"}
+        stages = all_stages if "all" in args.force else set(args.force)
         video = build_video(
             run_dir=run_dir,
             planner=runtime.spec_planner(),
@@ -442,47 +446,46 @@ def main(argv: list[str] | None = None) -> int:
             illustrator=runtime.illustrator(args.model),
             upscaler=runtime.upscaler(),
             renderer=runtime.renderer(),
+            metadata_writer=runtime.metadata_writer(),
+            headline=args.headline,
             script=script,
             scriptwriter=writer,
             force=stages,
         )
         print(f"\n  {video}")
+        print(f"  review everything in {run_dir}/ before `pipeline publish {args.slug}`")
         return 0
 
     if args.command == "publish":
-        from contentforge import runtime
-        from contentforge.pipeline import VIDEO_NAME, load_or_write_script
+        from contentforge.pipeline import (
+            METADATA_NAME,
+            THUMBNAIL_NAME,
+            VIDEO_NAME,
+            load_metadata,
+        )
         from contentforge.publish import youtube
-        from contentforge.sourcing.fetch import load_sources
-        from contentforge.visuals import thumbnail
 
         run_dir = args.root / args.slug
         video = run_dir / VIDEO_NAME
-        if not video.exists():
-            raise MissingDataError(
-                f"no rendered video at {video}; run `pipeline make {args.slug}` first"
-            )
-
-        script = load_or_write_script(run_dir, None)
-        try:
-            sources = load_sources(run_dir)
-        except MissingDataError:
-            sources = []   # a hand-written script may carry no fetched sources
-        meta = runtime.metadata_writer()(script, sources)
-
-        # Build the thumbnail from the first finished frame.
-        frames = sorted((run_dir / "frames").glob("frame_*.png"))
-        if not frames:
-            raise MissingDataError(f"no frames in {run_dir / 'frames'} for a thumbnail")
-        thumb = thumbnail.compose(
-            frames[0], args.headline or meta.title, run_dir / "thumbnail.png"
-        )
+        thumb = run_dir / THUMBNAIL_NAME
+        # Publish only uploads what `make` already produced and you reviewed;
+        # it generates nothing. Missing artefacts mean the video was not fully
+        # made, not that publish should quietly make them now.
+        for needed, what in ((video, "video"), (run_dir / METADATA_NAME, "metadata"),
+                             (thumb, "thumbnail")):
+            if not needed.exists():
+                raise MissingDataError(
+                    f"no {what} at {needed}; run `pipeline make {args.slug}` and "
+                    "review the run directory before publishing"
+                )
+        meta = load_metadata(run_dir)
 
         print(f"  title:    {meta.title}")
         print(f"  privacy:  {args.privacy}")
         print(f"  tags:     {', '.join(meta.tags)}")
         print(f"  video:    {video}")
         print(f"  thumb:    {thumb}")
+        print(f"  (review {run_dir}/ — script.txt, metadata.json, subtitles, thumbnail)")
         if not args.yes:
             reply = input(f"\n  upload to YouTube as {args.privacy}? [y/N] ").strip().lower()
             if reply != "y":

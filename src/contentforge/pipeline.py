@@ -39,6 +39,8 @@ SCRIPT_NAME = "script.txt"
 SPEC_NAME = "spec.json"
 MANIFEST_NAME = "manifest.json"
 VIDEO_NAME = "video.mp4"
+METADATA_NAME = "metadata.json"
+THUMBNAIL_NAME = "thumbnail.png"
 
 AUDIO_DIR = "audio"
 RAW_DIR = "raw"
@@ -336,6 +338,62 @@ def ensure_video(run_dir: Path, clips: list[Clip], frames: list[Path],
     )
 
 
+# --- metadata + thumbnail (reviewable before publish) -----------------------
+
+def _metadata_to_json(meta) -> str:
+    return json.dumps({
+        "title": meta.title,
+        "description": meta.description,
+        "tags": list(meta.tags),
+        "category_id": meta.category_id,
+    }, indent=2)
+
+
+def load_metadata(run_dir: Path):
+    """Read the reviewed metadata written by `make`, for `publish` to upload."""
+    from contentforge.publish.metadata import Metadata
+
+    path = run_dir / METADATA_NAME
+    if not path.exists():
+        raise MissingDataError(
+            f"no metadata at {path}; run `pipeline make` first so the title, "
+            "description and tags exist to review before publishing"
+        )
+    data = json.loads(path.read_text())
+    return Metadata(
+        title=data["title"], description=data["description"],
+        tags=tuple(data.get("tags", ())),
+        category_id=data.get("category_id", "27"),
+    )
+
+
+def ensure_metadata(run_dir: Path, script: str, sources: list,
+                    writer: Callable, force: bool = False):
+    """Title, description and tags, written to disk for review before upload."""
+    path = run_dir / METADATA_NAME
+    if path.exists() and not force:
+        meta = load_metadata(run_dir)
+        return meta, Stage("metadata", f"{meta.title!r}, cached", skipped=True)
+
+    meta = writer(script, sources)
+    path.write_text(_metadata_to_json(meta))
+    return meta, Stage("metadata", f"{meta.title!r}, {len(meta.tags)} tags")
+
+
+def ensure_thumbnail(run_dir: Path, frames: list[Path], headline: str,
+                     force: bool = False) -> tuple[Path, Stage]:
+    """The thumbnail, built from a finished frame, beside the mp4 for review."""
+    from contentforge.visuals import thumbnail
+
+    path = run_dir / THUMBNAIL_NAME
+    if path.exists() and not force:
+        return path, Stage("thumbnail", f"{path}, cached", skipped=True)
+    if not frames:
+        raise MissingDataError("no finished frames to build a thumbnail from")
+    thumbnail.compose(frames[0], headline, path)
+    return path, Stage("thumbnail", f"{path} ({headline!r})")
+
+
 # --- the loop ---------------------------------------------------------------
 
 def build_video(
@@ -347,11 +405,17 @@ def build_video(
     renderer: Callable,
     script: str | None = None,
     scriptwriter: Callable[[Path], str] | None = None,
+    metadata_writer: Callable | None = None,
+    headline: str | None = None,
     force: set[str] | None = None,
     log: Callable[[str], None] = print,
     timer: Callable[[Path], float] = measure_duration,
 ) -> Path:
     """Every stage, in order, resuming whatever is already on disk.
+
+    Produces every reviewable artefact - script, audio, frames, video,
+    subtitles, metadata and thumbnail - so nothing is generated for the first
+    time inside `publish`. Publishing only uploads what was already reviewed.
 
     The callables are injected rather than imported so the whole loop is
     testable without a GPU, a TTS service or ffmpeg - which is what makes it
@@ -377,10 +441,30 @@ def build_video(
     video, stage = ensure_video(run_dir, clips, frames, renderer, "render" in force)
     stages.append(stage)
 
+    if metadata_writer is not None:
+        sources = _load_sources_quietly(run_dir)
+        meta, stage = ensure_metadata(run_dir, text, sources, metadata_writer,
+                                      "metadata" in force)
+        stages.append(stage)
+        _, stage = ensure_thumbnail(run_dir, frames, headline or meta.title,
+                                    "thumbnail" in force)
+        stages.append(stage)
+
     for entry in stages:
         log(f"  {entry.name:<8} {entry.detail}{'  (skipped)' if entry.skipped else ''}")
     write_manifest(run_dir, beats, specs, clips, video, stages)
     return video
+
+
+def _load_sources_quietly(run_dir: Path) -> list:
+    """The fetched sources if a script was generated, else none - a hand-written
+    script carries no provenance trail, and metadata is still worth having."""
+    from contentforge.sourcing.fetch import load_sources
+
+    try:
+        return load_sources(run_dir)
+    except MissingDataError:
+        return []
 
 
 def write_manifest(run_dir: Path, beats: list[str], specs: list[BeatSpec],
