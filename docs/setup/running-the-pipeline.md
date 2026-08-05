@@ -110,68 +110,46 @@ The spec stage is chunked at 20 beats per call, so a 200-beat script is ten
 calls — a few minutes through OmniRoute, 20-40 through Ollama, all of it before
 any GPU work begins.
 
-### Reaching the LLM from inside the hermes sandbox
+### Running the whole pipeline inside the hermes sandbox
 
-**It cannot, as the sandbox is currently built.** Measured from inside the
-running `hermes-*` container, not inferred from the host:
-
-```
-direct    http://172.21.0.1:20128     URLError   (no route)
-via proxy http://172.21.0.1:20128     403
-direct    http://172.20.0.1:20128     URLError
-via proxy http://172.20.0.1:20128     403
-```
-
-Two independent reasons, both deliberate:
-
-1. **The container has no default route.** It sits on `scrape-internal`, which
-   is `internal=true`; Docker installs no gateway on such a network. Its route
-   table contains its own `/16` and nothing else, so no host IP is reachable —
-   `172.17.0.1` (the default-bridge gateway) least of all, since the container
-   is not on that bridge.
-2. **All egress goes through tinyproxy, which is default-deny.** `scrape-proxy`
-   runs with `FilterDefaultDeny Yes` against a 32-entry domain whitelist. Any
-   host not on that list gets 403, and the OmniRoute host is not on it.
-
-To allow it while keeping the sandbox's audited-egress design, add the host to
-the proxy whitelist rather than attaching the container to another network:
+**The sandbox runs the full pipeline** — this was made to work deliberately, and
+each stage is verified from inside the running container, not inferred from the
+host:
 
 ```
-^172\.21\.0\.1$
+pipeline doctor        gpu + ffmpeg + upscaler + fonts + llm all green
+spec generation        219 models reachable through OmniRoute over the bridge
+image generation       a real 768x432 frame drawn on the passed-through GPU
 ```
 
-then point the container at `http://172.21.0.1:20128/v1` — that is the
-`scrape-egress` gateway, which is the host, and `scrape-proxy` sits on that
-network so it can route there. No code change is needed: Python's `urllib`
-honours `http_proxy`, which the sandbox already sets.
+What made it work, in order:
 
-### What else the sandbox is missing
+1. **GPU passthrough.** `nvidia-container-toolkit` on the host, then
+   `--gpus=all` in the hermes `terminal.docker_extra_args`. Without the toolkit
+   the flag fails every `docker run`, so install first, add the flag second.
+2. **Memory.** sdxl-turbo offloads the model to system RAM, peaking ~8-9 GB, so
+   `terminal.container_memory` is raised to `12288`. The 5 GB default OOMs.
+3. **Reaching OmniRoute.** The sandbox has no route to the host and a
+   default-deny egress proxy. One `ufw` rule allows the egress subnet to reach
+   the API port, and the OmniRoute host is added to the proxy whitelist. The LLM
+   base URL inside the sandbox is `http://172.21.0.1:20128/v1` (the bridge
+   gateway), set in `terminal.docker_env`.
+4. **Assets, not downloads.** The Hugging Face model cache, the Real-ESRGAN
+   binary, the fonts and the contentforge source are copied into the sandbox
+   home (`~/.hermes/sandboxes/docker/default/home`, which is `/root` in the
+   container). torch, diffusers and contentforge are `pip install --user`ed
+   there so they persist; ffmpeg is a static binary in `/root/.local/bin`.
+5. **No `HF_HUB_OFFLINE`.** It breaks fp16-variant loading under diffusers 0.39
+   (see local-image-generation.md). Weights still load from the copied cache;
+   only the tiny metadata check goes online, through the proxy.
 
-Measured in the same container:
+The Telegram agent makes a video by running `pipeline make` in its own terminal
+— there is a `contentforge-video` hermes skill describing exactly that. No host
+round-trip and no mailbox: the container is the worker.
 
-| need | status |
-|---|---|
-| GPU (`/dev/nvidia*`) | **absent** |
-| `ffmpeg` / `ffprobe` | **absent** |
-| `generativelanguage.googleapis.com` (Gemini TTS) | **not whitelisted** |
-| `speech.platform.bing.com` (edge-tts) | whitelisted |
-| `huggingface.co`, `cdn-lfs.huggingface.co`, `us.aws.cdn.hf.co` | whitelisted |
-| `commons.wikimedia.org`, `pypi.org` | whitelisted |
-
-**So three of the five stages cannot run in the sandbox at all.** `draw` needs a
-GPU, `letter` needs one for the upscaler, and `render` needs ffmpeg. Whitelisting
-the LLM host fixes `spec` and nothing else.
-
-### The arrangement that actually works
-
-Run the pipeline **on the host**, and let hermes trigger it rather than contain
-it. The host already has the GPU, ffmpeg, the fonts, the upscaler and OmniRoute
-on loopback — `pipeline doctor` passes there today.
-
-If the pipeline must genuinely run inside a container, it needs its own, built
-for the job: `--gpus all`, ffmpeg installed, the HF cache mounted, and either
-`--network host` or a bridge network — not the scrape sandbox, whose whole
-purpose is to deny exactly this.
+Two secrets the agent cannot supply and the user must add to
+`terminal.docker_env`: `GEMINI_API_KEY` (narration) and, only if OmniRoute
+requires one, `CONTENTFORGE_LLM_KEY`.
 
 ---
 
@@ -298,25 +276,12 @@ or checklist item is too long. Shorten it in `spec.json` and rerun `letter`.
 
 ## 6. Running it under hermes
 
-**The pipeline does not run inside the hermes scrape sandbox.** That container
-has no GPU, no ffmpeg, no route to the host, and a default-deny egress proxy —
-see §2 for the measurements. Three of the five stages cannot execute there.
+**The pipeline runs inside the hermes sandbox** — see the sandbox subsection of
+§2 for how it was made to work and what is verified. The Telegram agent makes a
+video by running `pipeline make` in its own terminal; the `contentforge-video`
+hermes skill spells out the commands.
 
-The working arrangement is that hermes **triggers** `pipeline make` on the host,
-where the GPU, ffmpeg, the fonts, the upscaler and OmniRoute all already are.
-Nothing in the pipeline is interactive and nothing prompts, so it is safe to
-drive unattended.
-
-If you do build a dedicated container for it, it needs:
-
-- the environment variables from §2
-- `--gpus all` and the Hugging Face cache mounted
-  ([local-image-generation.md](local-image-generation.md) §6)
-- `ffmpeg` in the image
-- the fonts and the upscaler on a persistent volume, or baked into the image
-- a network that reaches OmniRoute — `--network host` is simplest
-
-`pipeline doctor` is the first thing to run inside any container when something
+`pipeline doctor` is the first thing to run inside the container when something
 misbehaves. It now probes the LLM endpoint rather than merely checking that a
 variable is set, so it distinguishes "the GPU was not passed through" from "the
 fonts are not mounted" from "the LLM URL points at the dashboard port" — which

@@ -164,16 +164,21 @@ sudo systemctl restart docker
 **Nothing may prompt for input.** Every setting comes from the environment:
 
 ```bash
-CONTENTFORGE_IMAGE_MODEL=stabilityai/sd-turbo
+CONTENTFORGE_IMAGE_MODEL=stabilityai/sdxl-turbo
 CONTENTFORGE_IMAGE_WIDTH=768
 CONTENTFORGE_IMAGE_HEIGHT=432
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-HF_HUB_OFFLINE=1        # after the first download: never call out again
 ```
 
-`HF_HUB_OFFLINE=1` is worth setting once the model is cached. It makes image
-generation genuinely offline, so the stage cannot fail because Hugging Face is
-having a bad day.
+**Do not set `HF_HUB_OFFLINE=1`.** It reads as an obvious optimisation once the
+model is cached, but `diffusers` 0.39 resolves the `fp16` variant by calling the
+Hub's metadata API even when the weights are already on disk, and with
+`HF_HUB_OFFLINE=1` that call hard-fails with `OfflineModeIsEnabled` — the model
+"is not cached locally" even though it is. Leave it unset: the metadata request
+is tiny, the multi-gigabyte weights still load from cache, and inside a
+network-restricted sandbox it goes through the proxy (whitelist `huggingface.co`,
+which is usually already allowed). Measured cost of the online metadata check
+with warm weights: about two seconds.
 
 ### Checking it from inside the container
 
