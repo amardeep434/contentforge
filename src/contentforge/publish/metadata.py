@@ -29,13 +29,24 @@ MAX_TAGS_TOTAL = 500
 #: A default category id; 27 is "Education". Overridable per upload.
 DEFAULT_CATEGORY = "27"
 
-SYSTEM = """You write YouTube metadata for a factual explainer video.
+SYSTEM = """You write YouTube metadata for a long-form business-explainer video,
+modelled on the title and description pattern proven to work in this niche.
+
+The pattern, measured across the channel's best-performing videos:
+- Titles follow "The Economics of Owning a [X]", where X is a concrete business
+  the viewer has plausibly stood inside - a gym, a car dealership, a shopping
+  mall. The winners are always tangible, everyday businesses, never abstract
+  ones. Keep the title in that frame unless the script is clearly not about
+  owning a business, in which case name the thing plainly.
+- Descriptions open with one sentence restating the video's central reframe,
+  then two or three short paragraphs of what it covers, in plain language.
 
 Return a JSON object with:
-- "title": under 100 characters, specific and concrete, no clickbait punctuation
-  spam, no ALL CAPS words. It names what the video explains.
-- "description": two or three short paragraphs. First line restates the hook.
-  Do not invent facts not in the script. Do not claim personal experience.
+- "title": under 100 characters, in the pattern above. No clickbait punctuation
+  spam, no ALL CAPS words.
+- "description": first line restates the hook, then two or three short
+  paragraphs. Do not invent facts not in the script. Never claim personal
+  experience.
 - "tags": 8 to 15 short lowercase search phrases, as a JSON array.
 
 Return only the JSON object. No prose, no code fence.

@@ -36,9 +36,12 @@ def cues_from_shots(shots) -> list[Cue]:
     """One cue per shot, back to back, timed by measured audio."""
     if not shots:
         raise MissingDataError("no shots to caption")
+    from contentforge.voice.speak import _CITATION
+
     cues = []
     for index, shot in enumerate(shots, start=1):
-        text = " ".join(shot.text.split())
+        # Captions show what is heard, and the narrator does not speak [1].
+        text = " ".join(_CITATION.sub("", shot.text or "").split())
         if not text:
             raise MissingDataError(f"shot {index} has no words to caption")
         cues.append(Cue(index=index, start_s=shot.start_s,

@@ -186,6 +186,27 @@ def line_height(kind: str, size: int) -> int:
     return ascent + descent
 
 
+def centered_heading(frame_size: tuple[int, int],
+                     lines: list[tuple[str, int, str]],
+                     top_fraction: float = 0.08,
+                     line_gap: int = 6) -> list[TextBlock]:
+    """A heading centred across the top, drawn straight on the background.
+
+    The reference's most common frame is one hand-lettered word near the top of
+    an otherwise empty background, no document around it. A drawn sheet for a
+    single word reads as a form to fill in, not a title - so heading-only beats
+    use this and the sheet is reserved for genuine checklists.
+    """
+    width, _ = frame_size
+    blocks, cursor = [], int(frame_size[1] * top_fraction)
+    for text, size, kind in lines:
+        text_w = measure(text.replace("[x]", "X"), kind, size)[0]
+        x = max(MARGIN, (width - text_w) // 2)
+        blocks.append(TextBlock(text, x, cursor, size=size, font=kind))
+        cursor += line_height(kind, size) + line_gap
+    return blocks
+
+
 def stack_blocks(lines: list[tuple[str, int, str]], x: int, y: int,
                  line_gap: int = 0) -> list[TextBlock]:
     """Stack lines downward from a known corner.

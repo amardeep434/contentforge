@@ -72,3 +72,10 @@ def test_a_short_caption_is_left_on_one_line():
 def test_a_negative_start_is_rejected():
     with pytest.raises(MissingDataError, match="before the video"):
         to_srt([Cue(1, -0.1, 3.0, "x")])
+
+
+def test_citation_markers_are_stripped_from_captions():
+    # The narrator never speaks "[1]", so captions must not show it either.
+    cues = cues_from_shots([shot(0.0, 4.0, "A gym is a subscription business [2].")])
+    assert "[2]" not in cues[0].text
+    assert cues[0].text.endswith("business.")

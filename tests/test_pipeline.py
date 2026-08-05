@@ -308,3 +308,44 @@ def test_a_full_run_writes_timed_subtitles(tmp_path):
     srt = (run / SUBS_SRT).read_text()
     assert "00:00:00,000 --> 00:00:04,000" in srt
     assert (run / SUBS_VTT).read_text().startswith("WEBVTT")
+
+
+# --- lettering style --------------------------------------------------------
+
+def test_a_heading_only_beat_is_drawn_without_a_sheet(tmp_path):
+    # The reference's dominant frame is one word on an empty background, no
+    # document around it. A sheet for a single word reads as a form to fill in.
+    from PIL import Image
+    from contentforge.pipeline import letter_frame
+    from contentforge.script.spec import BeatSpec
+    from contentforge.visuals import sheet
+
+    frame = tmp_path / "f.png"
+    Image.new("RGB", (1920, 1080), (240, 232, 216)).save(frame)
+    drawn = {"sheet": False}
+    original = sheet.draw
+    sheet.draw = lambda *a, **k: drawn.__setitem__("sheet", True)
+    try:
+        letter_frame(frame, BeatSpec(text="t", subject="s", heading="TRUTH"))
+    finally:
+        sheet.draw = original
+    assert drawn["sheet"] is False
+
+
+def test_a_checklist_beat_still_uses_the_sheet(tmp_path):
+    from PIL import Image
+    from contentforge.pipeline import letter_frame
+    from contentforge.script.spec import BeatSpec
+    from contentforge.visuals import sheet
+
+    frame = tmp_path / "f.png"
+    Image.new("RGB", (1920, 1080), (240, 232, 216)).save(frame)
+    drawn = {"sheet": False}
+    original = sheet.draw
+    sheet.draw = lambda *a, **k: drawn.__setitem__("sheet", True) or frame
+    try:
+        letter_frame(frame, BeatSpec(text="t", subject="s", heading="LEGAL",
+                                     checklist=("AIR INTAKE", "VENTILATION")))
+    finally:
+        sheet.draw = original
+    assert drawn["sheet"] is True

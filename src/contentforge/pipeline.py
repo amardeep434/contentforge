@@ -256,23 +256,31 @@ def ensure_frames(run_dir: Path, specs: list[BeatSpec], raws: list[Path],
 
 
 def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
-    """Draw the sheet, then the words inside it.
+    """Letter a frame in the reference's dominant style, or a document when asked.
 
-    The reference channel letters onto a drawn document rather than over the
-    background. Doing the same makes placement deterministic: the sheet's corner
-    is known, so nothing has to search the frame for a gap and hope one exists.
+    Most beats are one hand-lettered word near the top of an empty background -
+    so a heading with no checklist is drawn centred at the top, straight on the
+    background, no document around it. A drawn sheet for a single word reads as a
+    form to fill in.
 
-    Where the lettering will not fit a sheet, it falls back to the measured
-    empty-space placement rather than failing the whole render - one
-    over-optimistic heading should not cost twenty minutes of work already done.
+    A checklist is a genuine document moment (the reference does use these), so a
+    beat that carries one is lettered onto a drawn sheet with the heading inside
+    it. If the lettering will not fit a sheet, it falls back to measured
+    empty-space placement rather than failing a render already twenty minutes in.
     """
     from PIL import Image
 
     lines = caption_lines(spec)
-    footer = bool(spec.stamp)
     with Image.open(frame_path) as image:
         frame_size = image.size
+
+        if not spec.checklist:
+            blocks = caption.centered_heading(frame_size, lines)
+            return caption.apply(frame_path, blocks, frame_path)
+
         side = sheet.quieter_side(image)
+
+    footer = bool(spec.stamp)
     try:
         area = sheet.place(frame_size, sheet.size_for(lines, footer=footer), side)
     except MissingDataError:

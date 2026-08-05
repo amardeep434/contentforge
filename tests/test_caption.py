@@ -131,3 +131,12 @@ def test_a_checklist_spaces_itself_from_the_font(tmp_path):
 
     blocks = checklist(["one", "two"], 100, 200, size=38)
     assert blocks[1].y - blocks[0].y >= line_height("body", 38)
+
+
+def test_a_centered_heading_sits_near_the_top_and_is_centred():
+    from contentforge.visuals.caption import centered_heading, measure
+    blocks = centered_heading((1920, 1080), [("TRUTH", 120, "heading")])
+    b = blocks[0]
+    assert b.y < 1080 * 0.2                         # near the top
+    text_w = measure("TRUTH", "heading", 120)[0]
+    assert abs((b.x + text_w / 2) - 960) < 5        # horizontally centred

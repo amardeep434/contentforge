@@ -123,12 +123,15 @@ def speaker(backend: str | None = None, voice: str | None = None
 
     if chosen == "gemini":
         from contentforge.voice.backends import DEFAULT_GEMINI_VOICE, gemini_runner
+        from contentforge.voice.speak import strip_citations
 
         name = voice or os.environ.get(ENV_VOICE, DEFAULT_GEMINI_VOICE)
 
         def speak(text: str, path: Path) -> Path:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(gemini_runner(text, voice=name))
+            # Strip [1] markers so the narrator never says "bracket one"; edge
+            # does this inside synthesise, Gemini needs it done here.
+            path.write_bytes(gemini_runner(strip_citations(text), voice=name))
             return path
 
         return speak
