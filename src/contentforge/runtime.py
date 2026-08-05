@@ -21,10 +21,10 @@ from contentforge.errors import MissingDataError
 #: cost of the change is that it needs a key and a network.
 DEFAULT_VOICE_BACKEND = "gemini"
 
-#: OmniRoute's OpenAI-compatible API. Note the port: 37777 is its dashboard,
-#: 20128 is the API, and hitting the first gives 404s that look like the wrong
-#: path rather than the wrong port. It binds 0.0.0.0, so the same host works
-#: from inside a container via the docker bridge gateway.
+#: OmniRoute's OpenAI-compatible API. Both the API and the dashboard are on
+#: 20128 - the API at /v1, the dashboard at /. (37777 is unrelated; another
+#: service squats it.) It binds 0.0.0.0, so the same host works from inside a
+#: container via the docker bridge gateway.
 DEFAULT_LLM_BASE_URL = "http://127.0.0.1:20128/v1"
 
 #: Free, and measured at 8.6s for three beats against 74s for the best local

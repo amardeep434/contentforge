@@ -78,9 +78,11 @@ because 1024x576 runs a 6 GB card out of memory, then upscaled 4x and fitted to
 ### Choosing an LLM
 
 **OmniRoute is the default.** It already runs here, it speaks the OpenAI API, and
-one base URL covers both this machine and hermes. Its dashboard is on **37777**;
-its API is on **20128** — a different port, which is the thing that wastes an
-afternoon if you assume otherwise.
+one base URL covers both this machine and hermes. **Both the API and the
+dashboard are on port 20128** (`http://localhost:20128`); the API answers at
+`/v1`, the dashboard at `/`. Nothing OmniRoute runs on 37777 — if a browser
+there says "not responding", that port belongs to another service (claude-mem
+was squatting it during this build).
 
 ```bash
 omniroute health                 # is the server up
