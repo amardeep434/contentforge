@@ -41,6 +41,10 @@ For each narration beat you return:
   electric desk fan", "an empty wooden chair", "a stack of coins"). Never abstract
   ("the concept of risk") - draw the one object that stands for it. No settings,
   no "above/beside/with", no second object, no numbers or dials.
+  NEVER a realistic person or body part - no hands, fingers, arms, or faces; the
+  model mangles them (seven-fingered hands). When a person is needed, ask for "a
+  simple black stick figure" doing the action, nothing more detailed. Prefer an
+  object over a person wherever the point allows it.
 - "heading": at most four words in caps that name the point, or "" for none.
   Each word is drawn on its own line, so five words is five lines and will not
   fit. Count the words before you answer.

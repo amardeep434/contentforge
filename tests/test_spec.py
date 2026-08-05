@@ -236,3 +236,10 @@ def test_chapters_never_go_backwards():
 
 def test_a_missing_or_zero_chapter_means_no_marker():
     assert parse_spec(json.dumps([entry()]), ["one."])[0].chapter == 0
+
+
+def test_the_spec_prompt_forbids_realistic_anatomy():
+    # The image model draws seven-fingered hands; people must be stick figures.
+    from contentforge.script.spec import SYSTEM
+    assert "stick figure" in SYSTEM
+    assert "body part" in SYSTEM or "fingers" in SYSTEM

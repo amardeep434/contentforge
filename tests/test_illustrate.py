@@ -159,3 +159,9 @@ def test_a_missing_upscaler_says_where_to_look(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "UPSCALER", tmp_path / "absent")
     with pytest.raises(MissingDataError, match="local-image-generation"):
         mod.upscale(tmp_path / "a.png", tmp_path / "b.png")
+
+
+def test_the_negative_prompt_bans_mangled_hands():
+    # Diffusion mangles hands (a seven-fingered hand shipped in the first render).
+    for term in ("fingers", "deformed hands", "person"):
+        assert term in NEGATIVE

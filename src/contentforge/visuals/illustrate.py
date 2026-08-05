@@ -92,7 +92,9 @@ COMPOSITION = ""
 NEGATIVE = (
     "photo, photorealistic, 3d render, gradient, blurry, watermark, signature, "
     "label, text, letters, words, numbers, digits, dial, gauge, clock, "
-    "cluttered, busy, multiple objects, frame border, grain, noise"
+    "cluttered, busy, multiple objects, frame border, grain, noise, "
+    "realistic hand, hands, fingers, extra fingers, deformed hands, mutated "
+    "hands, realistic face, detailed anatomy, person"
 )
 
 
