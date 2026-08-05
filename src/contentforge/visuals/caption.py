@@ -28,9 +28,31 @@ BODY_FONT = FONT_DIR / "patrickhand.ttf"
 INK = (26, 26, 26)
 PAPER = (245, 241, 232)
 
+#: Our accent, deliberately not the reference's red. A muted teal reads clearly
+#: against the cream background and marks this as our channel rather than a copy
+#: of theirs - the one place a single non-ink colour appears, on the chapter
+#: number, the way theirs uses red on the focal figure.
+ACCENT = (38, 122, 118)
+
 #: Nothing sits closer to the edge than this. The reference keeps generous
 #: margins, which is part of why it reads as uncluttered.
 MARGIN = 90
+
+#: Chapter markers are spelled, not numbered - the reference letters "TWO" in
+#: the corner, not "2". Covers a video's worth of chapters; beyond this the
+#: number is drawn as digits.
+_ORDINALS = (
+    "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT",
+    "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN",
+    "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN", "TWENTY",
+)
+
+
+def ordinal_word(number: int) -> str:
+    """`TWO` for 2, spelled the way the reference letters its chapters."""
+    if number < 0:
+        raise MissingDataError("a chapter number cannot be negative")
+    return _ORDINALS[number] if number < len(_ORDINALS) else str(number)
 
 
 @dataclass(frozen=True)
@@ -43,6 +65,19 @@ class TextBlock:
     size: int = 64
     font: str = "heading"
     colour: tuple = INK
+
+
+def chapter_label(frame_size: tuple[int, int], number: int,
+                  size: int = 40) -> TextBlock:
+    """The chapter marker, lettered in the accent colour in the top-left corner.
+
+    Top-left, not centred, so it sits out of the way of the heading and reads as
+    a running section marker rather than a title.
+    """
+    return TextBlock(
+        ordinal_word(number), MARGIN, int(frame_size[1] * 0.04),
+        size=size, font="heading", colour=ACCENT,
+    )
 
 
 def load_font(kind: str, size: int):

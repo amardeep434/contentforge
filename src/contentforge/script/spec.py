@@ -16,7 +16,7 @@ network.
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from contentforge.errors import MissingDataError
 from contentforge.providers.llm import LLMClient
@@ -42,6 +42,10 @@ For each narration beat you return:
   Each word is drawn on its own line, so five words is five lines and will not
   fit. Count the words before you answer.
 - "checklist": up to four very short ticked items, or [] for none.
+- "chapter": the section number this beat belongs to, counting from 1, only
+  ever increasing. Group consecutive beats that cover one idea into the same
+  chapter; start a new chapter when the video turns to a distinctly new part.
+  A typical video has 4 to 8 chapters.
 
 Rules:
 - Never put words in "subject". Lettering is composited separately; a diffusion
@@ -65,6 +69,7 @@ class BeatSpec:
     heading: str = ""
     checklist: tuple[str, ...] = field(default_factory=tuple)
     stamp: str = ""
+    chapter: int = 0
 
     @property
     def has_lettering(self) -> bool:
@@ -141,8 +146,32 @@ def parse_spec(raw: str, beats: list[str]) -> list[BeatSpec]:
         specs.append(BeatSpec(
             text=text, subject=subject, heading=heading, checklist=checklist,
             stamp=str(entry.get("stamp", "") or "").strip().upper(),
+            chapter=_chapter_of(entry),
         ))
-    return specs
+    return _monotonic_chapters(specs)
+
+
+def _chapter_of(entry: dict) -> int:
+    """A non-negative chapter number, or 0 for 'no chapter marker'."""
+    raw = entry.get("chapter", 0)
+    try:
+        number = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
+
+
+def _monotonic_chapters(specs: list[BeatSpec]) -> list[BeatSpec]:
+    """Chapters only ever climb. A model that renumbers mid-video (3, then 2)
+    would flash an earlier chapter marker back onto a later beat; each beat
+    inherits the highest chapter seen so far."""
+    highest = 0
+    fixed = []
+    for spec in specs:
+        highest = max(highest, spec.chapter)
+        fixed.append(spec if spec.chapter == highest
+                     else replace(spec, chapter=highest))
+    return fixed
 
 
 #: Beats per call. One call for a whole 200-beat script overruns both the token

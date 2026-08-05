@@ -216,3 +216,23 @@ def test_a_chunk_that_keeps_failing_reports_what_was_wrong():
 def test_a_four_word_heading_is_accepted():
     specs = parse_spec(json.dumps([entry(heading="empty room, wasted money")]), ["one."])
     assert specs[0].heading == "EMPTY ROOM, WASTED MONEY"
+
+
+# --- chapters ---------------------------------------------------------------
+
+def test_chapters_are_parsed():
+    e = entry(); e["chapter"] = 2
+    assert parse_spec(json.dumps([e]), ["one."])[0].chapter == 2
+
+
+def test_chapters_never_go_backwards():
+    # A model that renumbers 3 then 2 would flash an earlier marker onto a later
+    # beat; each beat inherits the highest chapter seen so far.
+    a = entry("a"); a["chapter"] = 3
+    b = entry("b"); b["chapter"] = 2
+    specs = parse_spec(json.dumps([a, b]), ["one.", "two."])
+    assert [s.chapter for s in specs] == [3, 3]
+
+
+def test_a_missing_or_zero_chapter_means_no_marker():
+    assert parse_spec(json.dumps([entry()]), ["one."])[0].chapter == 0

@@ -140,3 +140,27 @@ def test_a_centered_heading_sits_near_the_top_and_is_centred():
     assert b.y < 1080 * 0.2                         # near the top
     text_w = measure("TRUTH", "heading", 120)[0]
     assert abs((b.x + text_w / 2) - 960) < 5        # horizontally centred
+
+
+def test_chapter_numbers_are_spelled_not_numbered():
+    from contentforge.visuals.caption import ordinal_word
+    assert ordinal_word(2) == "TWO"
+    assert ordinal_word(0) == "ZERO"
+    assert ordinal_word(99) == "99"          # beyond the table, digits
+
+
+def test_a_negative_chapter_raises():
+    from contentforge.visuals.caption import ordinal_word
+    import pytest
+    from contentforge.errors import MissingDataError
+    with pytest.raises(MissingDataError):
+        ordinal_word(-1)
+
+
+def test_the_chapter_label_is_in_the_accent_colour_top_left():
+    from contentforge.visuals.caption import ACCENT, INK, chapter_label
+    block = chapter_label((1920, 1080), 3)
+    assert block.text == "THREE"
+    assert block.colour == ACCENT
+    assert block.colour != INK
+    assert block.x < 1920 * 0.2 and block.y < 1080 * 0.2

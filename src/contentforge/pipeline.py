@@ -129,6 +129,8 @@ def _spec_to_json(specs: list[BeatSpec]) -> str:
                 "subject": spec.subject,
                 "heading": spec.heading,
                 "checklist": list(spec.checklist),
+                "stamp": spec.stamp,
+                "chapter": spec.chapter,
             }
             for spec in specs
         ],
@@ -143,6 +145,8 @@ def _spec_from_json(raw: str) -> list[BeatSpec]:
             subject=entry["subject"],
             heading=entry.get("heading", ""),
             checklist=tuple(entry.get("checklist", ())),
+            stamp=entry.get("stamp", ""),
+            chapter=entry.get("chapter", 0),
         )
         for entry in json.loads(raw)
     ]
@@ -248,7 +252,7 @@ def ensure_frames(run_dir: Path, specs: list[BeatSpec], raws: list[Path],
         if not target.exists():
             raise MissingDataError(f"upscaling produced nothing for {raw}")
         palette.normalise(target)
-        if not spec.has_lettering:
+        if not spec.has_lettering and not spec.chapter:
             continue
         letter_frame(target, spec)
         lettered += 1
@@ -274,8 +278,10 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
     with Image.open(frame_path) as image:
         frame_size = image.size
 
+        marker = [caption.chapter_label(frame_size, spec.chapter)] if spec.chapter else []
+
         if not spec.checklist:
-            blocks = caption.centered_heading(frame_size, lines)
+            blocks = marker + caption.centered_heading(frame_size, lines)
             return caption.apply(frame_path, blocks, frame_path)
 
         side = sheet.quieter_side(image)
@@ -288,7 +294,7 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
         return caption.apply(frame_path, blocks, frame_path)
 
     sheet.draw(frame_path, area, stamp=spec.stamp, signature=bool(spec.stamp))
-    blocks = caption.stack_blocks(lines, area.text_left, area.text_top)
+    blocks = marker + caption.stack_blocks(lines, area.text_left, area.text_top)
     return caption.apply(frame_path, blocks, frame_path)
 
 
