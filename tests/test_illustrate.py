@@ -32,20 +32,20 @@ def fake_generate(calls):
 def test_house_style_leads_the_prompt():
     # Early tokens carry more weight in a short prompt, and the style is what
     # must never drift between shots.
-    prompt = build_prompt("a dumbbell with a dollar sign")
+    prompt = build_prompt("a dumbbell")
     assert prompt.startswith(HOUSE_STYLE)
-    assert "a dumbbell with a dollar sign" in prompt
-    assert prompt.endswith(COMPOSITION)
+    assert prompt.endswith("a dumbbell")     # composition empty by default
 
 
-def test_the_prompt_asks_for_room_to_put_the_sheet():
-    # The lettering sits on a drawn sheet taking roughly half the frame, so the
-    # drawing has to leave that half alone.
-    assert "empty background" in build_prompt("a fan")
+def test_the_house_style_asks_for_one_simple_object():
+    # A first render drew a garbled compound scene; the style now forces a
+    # single centred object.
+    assert "one single object" in HOUSE_STYLE
 
 
-def test_composition_can_be_dropped_for_a_frame_with_no_lettering():
-    assert build_prompt("a fan", composition="").endswith("a fan")
+def test_a_composition_hook_is_still_appended_when_given():
+    prompt = build_prompt("a fan", composition="wide shot")
+    assert prompt.endswith("wide shot")
 
 
 def test_an_empty_subject_raises():
@@ -97,7 +97,7 @@ def test_no_subjects_raises(tmp_path):
 def test_turbo_settings_are_what_the_distilled_models_expect():
     # Turbo checkpoints are distilled for 1-4 steps with no guidance; raising
     # either degrades output rather than improving it.
-    assert TURBO_STEPS <= 4
+    assert 4 <= TURBO_STEPS <= 8   # 4 was too few for a coherent scene; 8 holds
     assert TURBO_GUIDANCE == 0.0
 
 

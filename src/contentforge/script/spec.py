@@ -35,9 +35,12 @@ SYSTEM = """You plan the visuals for a narrated explainer video in a hand-drawn
 line-art style: bold black ink on plain cream, no photographs, no 3D.
 
 For each narration beat you return:
-- "subject": what to draw, as a concrete noun phrase. One scene, plainly
-  describable. Never abstract ("the concept of risk") - draw the object that
-  stands for it ("a wooden chair with one leg sawn short").
+- "subject": ONE single simple object to draw, three to six words, no more. The
+  image model is weak - a compound scene ("a fan mounted above a thermometer
+  with the needle rising") comes out as garbage. Name one object plainly ("an
+  electric desk fan", "an empty wooden chair", "a stack of coins"). Never abstract
+  ("the concept of risk") - draw the one object that stands for it. No settings,
+  no "above/beside/with", no second object, no numbers or dials.
 - "heading": at most four words in caps that name the point, or "" for none.
   Each word is drawn on its own line, so five words is five lines and will not
   fit. Count the words before you answer.

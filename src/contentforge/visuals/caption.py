@@ -221,19 +221,55 @@ def line_height(kind: str, size: int) -> int:
     return ascent + descent
 
 
+def _clearest_top(image, block_height: int, line_gap: int = 6) -> int:
+    """Top Y for a centred heading that overlaps the drawing least.
+
+    A heading pinned to the very top collides with anything drawn there - a
+    ceiling fan fills the top of the frame and the words landed on the motor.
+    This scans candidate vertical positions and returns the one whose horizontal
+    band carries the least ink, preferring higher positions on a tie so the
+    reference's top-heavy look is kept where the top is actually empty.
+    """
+    from PIL import ImageFilter
+
+    width, height = image.size
+    grey = image.convert("L").filter(ImageFilter.FIND_EDGES)
+    margin = int(height * 0.05)
+    lowest = height - block_height - margin
+    if lowest <= margin:
+        return margin
+    best_y, best_ink = margin, None
+    steps = 12
+    for i in range(steps + 1):
+        y = margin + (lowest - margin) * i // steps
+        band = grey.crop((MARGIN, y, width - MARGIN, y + block_height))
+        ink = sum(band.getdata()) / max(band.width * band.height, 1)
+        # Bias toward the top: a small penalty per pixel of descent.
+        score = ink + y * 0.02
+        if best_ink is None or score < best_ink:
+            best_ink, best_y = score, y
+    return best_y
+
+
 def centered_heading(frame_size: tuple[int, int],
                      lines: list[tuple[str, int, str]],
-                     top_fraction: float = 0.08,
-                     line_gap: int = 6) -> list[TextBlock]:
-    """A heading centred across the top, drawn straight on the background.
+                     image=None, line_gap: int = 6) -> list[TextBlock]:
+    """A heading centred horizontally, drawn straight on the background.
 
     The reference's most common frame is one hand-lettered word near the top of
     an otherwise empty background, no document around it. A drawn sheet for a
     single word reads as a form to fill in, not a title - so heading-only beats
     use this and the sheet is reserved for genuine checklists.
+
+    Given the frame `image`, the vertical position is the emptiest band rather
+    than a fixed top offset, so the words do not land on whatever was drawn at
+    the top. Without an image it falls back to a top offset.
     """
-    width, _ = frame_size
-    blocks, cursor = [], int(frame_size[1] * top_fraction)
+    width, height = frame_size
+    block_height = sum(line_height(kind, size) + line_gap for _, size, kind in lines)
+    top = (_clearest_top(image, block_height, line_gap) if image is not None
+           else int(height * 0.08))
+    blocks, cursor = [], top
     for text, size, kind in lines:
         text_w = measure(text.replace("[x]", "X"), kind, size)[0]
         x = max(MARGIN, (width - text_w) // 2)

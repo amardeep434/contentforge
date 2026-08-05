@@ -283,8 +283,13 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
         marker = [caption.chapter_label(frame_size, spec.chapter)] if spec.chapter else []
 
         if not spec.checklist:
-            blocks = marker + caption.centered_heading(frame_size, lines)
-            return caption.apply(frame_path, blocks, frame_path)
+            # Place the heading in whatever the frame leaves empty - a side, a
+            # corner, wherever the ink is not - the way the reference does,
+            # rather than forcing it dead-centre onto a centred subject. A
+            # chapter-only beat has no heading lines; just the corner marker.
+            heading_blocks = caption.place_blocks(frame_path, lines) if lines else []
+            blocks = marker + heading_blocks
+            return caption.apply(frame_path, blocks, frame_path) if blocks else frame_path
 
         side = sheet.quieter_side(image)
 

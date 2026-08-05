@@ -51,9 +51,11 @@ FAST_MODEL = "stabilityai/sd-turbo"
 #: Kept as the name the offload branch tests against.
 LARGE_MODEL = DEFAULT_MODEL
 
-#: Turbo models are distilled for 1-4 steps and expect no guidance. Raising
-#: either does not improve them; it degrades them.
-TURBO_STEPS = 4
+#: Turbo models expect no guidance, but 4 steps is too few for a coherent scene:
+#: a first end-to-end render produced a garbled kitchen scale for "a ceiling fan
+#: above a thermometer". 8 steps holds the subject together at ~10s/image; the
+#: bigger lever was simplifying the subjects (see spec.py) and a harder negative.
+TURBO_STEPS = 8
 TURBO_GUIDANCE = 0.0
 
 #: Real-ESRGAN's anime model, which is trained on line art and reconstructs
@@ -70,28 +72,27 @@ FINAL_WIDTH, FINAL_HEIGHT = 1920, 1080
 #: Matched against a native-resolution frame from the reference channel: cream
 #: background, not blue; muted browns and greys; confident bold ink.
 HOUSE_STYLE = (
-    "hand drawn illustration, bold black ink outlines, flat plain cream "
-    "off-white background, muted colours, simple cartoon style, clean confident "
-    "linework, no shading, no gradient, no texture, not 3d, not a photograph"
+    "simple hand drawn line-art illustration, one single object centered, bold "
+    "black ink outlines, flat plain cream off-white background, minimal, lots of "
+    "empty space, muted colours, clean confident linework, no shading, no "
+    "gradient, no texture, no text, not 3d, not a photograph"
 )
 
-#: The lettering sits on a drawn sheet occupying roughly half the frame, so the
-#: drawing has to leave that half alone. Asking for it costs nothing and the
-#: layout measures the result anyway - `sheet.quieter_side` puts the document
-#: wherever the ink actually ended up, because the model obeys this about as
-#: often as it obeys anything.
-COMPOSITION = (
-    "subject on the right side of the frame, generous empty background on the "
-    "left, wide shot"
-)
+#: Empty by default now. Headings are lettered top-centre on the background (not
+#: on a half-frame sheet), so the drawing no longer has to vacate one side, and a
+#: centred single object reads best. The old "subject on the right, empty left"
+#: also overran CLIP's 77-token limit and was silently truncated. Kept as a hook
+#: a caller can still set.
+COMPOSITION = ""
 
 #: Pushed away from the failure modes seen in testing.
 #: "text" and "letters" are pushed away deliberately: diffusion garbles
 #: lettering, and the reference channel's captions are clean. Words are
 #: composited afterwards instead.
 NEGATIVE = (
-    "photo, photorealistic, 3d render, gradient, blurry, watermark, "
-    "text, letters, words, grain, noise"
+    "photo, photorealistic, 3d render, gradient, blurry, watermark, signature, "
+    "label, text, letters, words, numbers, digits, dial, gauge, clock, "
+    "cluttered, busy, multiple objects, frame border, grain, noise"
 )
 
 
