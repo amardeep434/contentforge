@@ -330,3 +330,83 @@ one, id `4nYkN0wTi2Q`).
   (37777 is claude-mem). `HF_HUB_OFFLINE` must stay **unset**. torchaudio pinned **2.6.0** (cu124).
   Subjects must be **one simple object / stick figures**, never realistic anatomy. `make` produces
   everything; `publish` only uploads.
+
+---
+
+## 9. UPDATE (later same session) — image-model eval hit walls; OPEN DECISION
+
+The "better image model" evaluation (§5) was pursued hard and hit **wall after wall**. Current
+honest state:
+
+**What works:** the **fixed sdxl-turbo baseline** (simple single-object subjects, 8 steps, hard
+negative prompt, stick-figures, empty-space heading placement) produces **coherent, on-subject,
+clean line art** at ~10 s/image. It is committed and produced a real end-to-end video. This is the
+fallback and it is good enough to ship.
+
+**What was tried and why each failed / is costly:**
+- **sdxl-turbo + ColoringBook LoRA** and **sdxl-base + ColoringBook LoRA**: LoRA prettifies
+  *objects* but **wrecks subject accuracy on people** (drew bottles / a desk scene instead of a
+  stick figure). base+LoRA also slower (~28 s) and drifts. Not worth it. (LoRAs downloaded:
+  `artificialguybr/ColoringBookRedmond-V2`, `LineAniRedmond-LinearMangaSDXL-V2`.)
+- **PixArt-Sigma**: broken — its T5 `spiece.model` tokenizer mis-parses as tiktoken; didn't run.
+- **Wan / HunyuanVideo / Seedance2** (operator asked): these are **video** models. Wan 2.2 on 6 GB
+  = 480p + minutes/clip + architecture change (overkill for still line-art); HunyuanVideo needs
+  14 GB+; **Seedance is API/closed, not offline**. Rejected.
+- **FLUX.1-schnell Q8 GGUF via diffusers-direct**: the official repo is **gated**; the GGUF
+  transformer loads, but assembling the pipeline needs the FLUX **components** (T5-xxl, CLIP-L, VAE,
+  tokenizers) from an **ungated** diffusers repo — the mirror tried (`cocktailpeanut/xulf-schnell`)
+  turned out **empty** (only `.no_exist` markers). Real FLUX-schnell transformer config was
+  hand-written (guidance_embeds=false, 19 layers, 38 single layers). Still need real ungated
+  components — **`Freepik/flux.1-lite-8B`** is open with `model_index.json` and shares FLUX's
+  standard T5/CLIP/VAE, so its components + our schnell GGUF transformer *should* work
+  (`FluxPipeline.from_pretrained("Freepik/flux.1-lite-8B", transformer=<gguf>)`). A background
+  download of those components was started (`<scratch>/dl_fluxcomp.py`) — **not verified to work**.
+- **Qwen-Image Q8 GGUF via diffusers-direct**: uses the **open** `Qwen/Qwen-Image` for components
+  (has everything), transformer config from `Qwen/Qwen-Image` `transformer/`. **BLOCKED** by
+  **`KeyError: None` in `diffusers/quantizers/gguf/utils.py` (`GGML_QUANT_SIZES[quant_type]`)** —
+  **diffusers 0.39 does not recognise the Qwen-Image GGUF's quant types.** This is a diffusers/gguf
+  version incompatibility, not a download problem.
+
+**Downloads already on disk (reusable, ~126 GB HF cache):** FLUX.1-schnell Q8 GGUF (~12.5 GB, at
+`city96--FLUX.1-schnell-gguf/.../flux1-schnell-Q8_0.gguf`), Qwen-Image Q8 GGUF (~20 GB, at
+`city96--Qwen-Image-gguf/.../qwen-image-Q8_0.gguf`), `Qwen/Qwen-Image` components, SDXL-base, PixArt,
+the two LoRAs. **Do not delete these until the model decision is final** — Wan2GP would reuse the
+same GGUF files.
+
+**Tooling reality:** **Wan2GP** (`deepbeepmeep/Wan2GP`, cloned to `<scratch>/Wan2GP`) is the tool the
+operator asked for and is *built* for GGUF FLUX/Qwen on low VRAM — BUT it pins **diffusers 0.36 /
+transformers 4.54 / numpy 2.1**, which **conflict with and would break** the working contentforge
+env (transformers 5.14, diffusers 0.39). **It must live in its own isolated venv.** It is also a
+**Gradio UI** app (headless scripted single-image A/B is fiddly) and primarily a video tool.
+
+### THE OPEN DECISION (operator to pick — resume here)
+
+> "FLUX/Qwen setup keeps hitting walls on 6 GB. How do you want to proceed?"
+
+- **Option A — Ship fixed sdxl-turbo, move on (RECOMMENDED for progress).** The baseline works, is
+  coherent and fast. Merge PR #2, finish the hermes-for-OmniVoice setup (§4 ⚠️), then do the cleanup
+  pass. Revisit better image models later as a focused project, ideally on a bigger GPU.
+- **Option B — Isolated Wan2GP venv, keep pursuing.** Build a separate venv for Wan2GP (won't touch
+  the working pipeline), reuse the downloaded GGUF weights, work out headless FLUX/Qwen generation.
+  More hours, uncertain payoff, ~1–3 min/image on 6 GB (a 200-shot video → hours).
+- **Option C — Try upgrading diffusers in a throwaway venv.** A newer diffusers may load the Qwen
+  GGUF (fix the `KeyError: None`). Faster than Wan2GP if it works; do it in a throwaway venv first so
+  it can't break the working stack.
+
+### 10. CLEANUP PASS (do once the model decision is final — operator asked for this)
+
+Reclaim disk / remove what the final choice doesn't need:
+- **HF model weights** (biggest — cache ~126 GB): delete the **losers**. If A wins: remove FLUX GGUF,
+  Qwen GGUF + `Qwen/Qwen-Image` components, SDXL-base, PixArt, both LoRAs (~90 GB). Keep sd-turbo +
+  sdxl-turbo (the pipeline default) + OmniVoice model. `rm -rf ~/.cache/huggingface/hub/models--<repo>`.
+- **pip packages** not needed by the winner: `peft`, `tiktoken`, `gguf` (only for the GGUF eval);
+  keep `omnivoice`, `soundfile`, `WeTextProcessing`, `torch/diffusers/transformers`.
+- **Scratch eval artefacts:** `<scratch>/compare/`, `cmp.py`, `compare*.py`, `gen_*.py`,
+  `dl_*.py/.log`, `robust_dl*`, `orch*.sh`, `Wan2GP/` (if not adopted), `flux_cfg/`.
+- Verify tests still pass and `pipeline doctor` is green after any removal.
+- `<scratch>` = `/tmp/claude-1000/-home-amardeep/35a61c40-e916-459f-b213-f713293bccc6/scratchpad`
+  (session-temp; may be wiped — the eval scripts and logs there are disposable).
+
+**Packages installed this session (host venv):** `omnivoice, soundfile, WeTextProcessing, peft,
+tiktoken, gguf, google-genai` (google-genai only proved Gemini is dead — removable). `torchaudio`
+pinned to **2.6.0** (cu124) — must stay pinned.
