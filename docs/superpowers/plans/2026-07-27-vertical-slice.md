@@ -1,5 +1,21 @@
 # Plan 2 — Vertical Slice to a Published Video
 
+> **Tasks 5–8 SUPERSEDED, 2026-07-30**, by
+> [Plan 3 — Art History Vertical Slice](2026-07-30-art-history-slice.md).
+>
+> **Tasks 1–4 are implemented and still correct** — LLM client, sourcing, script
+> generation and the policy gate are unaffected and Plan 3 builds on them.
+>
+> Tasks 5–8 were written against assumptions the evidence has since refuted: the
+> visuals task targets a labelled-grid thumbnail that is verifiably the *failing*
+> copycat's opening frame (C-011), and the plan optimises asset fidelity, which a
+> within-channel comparison showed to be inversely correlated with views — a
+> crude-doodle video beat its polished sibling 57x.
+>
+> Kept intact rather than rewritten, because the reasoning that produced it is
+> worth being able to re-read. See
+> [claims-ledger.md](../../findings/claims-ledger.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Publish three "how does X work" explainers, then read retention before making a fourth.

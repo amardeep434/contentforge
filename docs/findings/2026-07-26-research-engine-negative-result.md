@@ -3,6 +3,26 @@
 What a day of real data changed. Written up because the conclusions cost ~10,000 API
 units and two full implementations to reach, and would be expensive to rediscover.
 
+> **Correction, 2026-07-29 — every views-per-video figure in this document is void.**
+>
+> All of them are means. On 2026-07-29 a 146-channel scan established that the mean
+> overstates the median by more than 2x on 58% of channels, by up to 98x, because
+> these distributions are dominated by one or two viral hits. The mean measures the
+> hits, not the channel.
+>
+> Worked example: Explainer Chris, cited elsewhere in this project at "201,427
+> views/video", has a **median of 34,518** — nine hits carrying fifteen flops, floor
+> 1,177, ceiling 1,736,716.
+>
+> The rankings in §3 below therefore do not support the conclusions drawn from them.
+> The section is retained because its *qualitative* observations still hold and
+> because the reasoning errors it records are worth keeping visible — but treat every
+> number in it as unreliable.
+>
+> Correct measures are median, hit-rate and skew. See
+> [2026-07-29-watching-videos-and-median-scan.md](2026-07-29-watching-videos-and-median-scan.md)
+> and claims C-001 / C-002 / C-003 in [claims-ledger.md](claims-ledger.md).
+
 ## 1. Niche research via public YouTube data does not work
 
 Two implementations, both run against live data, both failed the same gate: *if the

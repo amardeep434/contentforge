@@ -8,6 +8,8 @@ Credentials come only from the environment and are never logged.
 """
 
 import argparse
+import json
+from dataclasses import asdict
 import os
 import re
 from datetime import datetime, timezone
@@ -208,6 +210,177 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("quota", help="show quota usage, local and authoritative")
 
+    threads = subparsers.add_parser(
+        "threads",
+        help="read Threads posts (no API key, no quota) - claims, not evidence",
+    )
+    threads.add_argument("query", help="search term, or @handle to read a profile")
+    threads.add_argument(
+        "--tags", action="store_true", help="search the tag feed instead of posts"
+    )
+    threads.add_argument(
+        "--limit", type=int, default=20, help="maximum posts to print"
+    )
+
+    leads = subparsers.add_parser(
+        "leads",
+        help="stage 1: gather Threads claims + screenshots for a query (no quota)",
+    )
+    leads.add_argument("query")
+    leads.add_argument(
+        "--source", choices=("threads", "reddit"), default="threads",
+        help="reddit carries the full post body and an engagement score; "
+             "threads hides its detail in reply screenshots",
+    )
+    leads.add_argument("--subreddit", default="", help="reddit only, e.g. aitubers")
+    leads.add_argument("--tags", action="store_true", help="threads only: tag feed")
+    leads.add_argument(
+        "--expand", action="store_true",
+        help="also pull the author's reply screenshots, where the step-by-step "
+             "actually lives (slow: one rendered fetch per post)",
+    )
+    leads.add_argument("--out", type=Path, default=None)
+    leads.add_argument(
+        "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+
+    resolve = subparsers.add_parser(
+        "leads-resolve",
+        help="stage 3: resolve named handles to measurements (~2 units each). "
+             "No judgement - it only measures.",
+    )
+    resolve.add_argument("run_dir", type=Path)
+    resolve.add_argument(
+        "--seen", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+
+    analyse = subparsers.add_parser(
+        "leads-analyse",
+        help="stage 4: judge stored measurements and promote them. Pure - costs "
+             "no quota, so criteria can change and be re-run freely.",
+    )
+    analyse.add_argument("run_dir", type=Path)
+    analyse.add_argument(
+        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+
+    channel = subparsers.add_parser(
+        "channel",
+        help="profile one channel end to end: resolve, measure, operator-check, "
+             "judge, and file it in potentials (~4 units)",
+    )
+    channel.add_argument(
+        "handle",
+        help="channel @handle, a UC... channel id, or a youtube.com URL of "
+             "either. An id is preferred - it needs no resolution and cannot be "
+             "the wrong channel.",
+    )
+    channel.add_argument(
+        "--potentials", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+
+    illus = subparsers.add_parser(
+        "illustrate",
+        help="generate line art locally on the GPU (free, offline)",
+    )
+    illus.add_argument("--check", action="store_true",
+                       help="report GPU capability and generate one test image")
+    illus.add_argument("--model", default=os.environ.get(
+        "CONTENTFORGE_IMAGE_MODEL", "stabilityai/sd-turbo"))
+    illus.add_argument("--width", type=int,
+                       default=int(os.environ.get("CONTENTFORGE_IMAGE_WIDTH", 768)))
+    illus.add_argument("--height", type=int,
+                       default=int(os.environ.get("CONTENTFORGE_IMAGE_HEIGHT", 432)))
+    illus.add_argument("--out", type=Path, default=Path("data/illustrations"))
+    illus.add_argument("subjects", nargs="*", help="one subject per image")
+
+    make = subparsers.add_parser(
+        "make",
+        help="build a whole video: script, visuals, narration, lettering, mp4",
+    )
+    make.add_argument("slug", help="run name; becomes the directory under --root")
+    make.add_argument(
+        "--script-file", type=Path, default=None,
+        help="narration to use; omitted means read script.txt already in the run",
+    )
+    make.add_argument(
+        "--topic", default=None,
+        help="generate the script from this topic (needs --source URLs)",
+    )
+    make.add_argument(
+        "--source", action="append", default=[], metavar="URL",
+        help="a primary source to ground the generated script; repeatable",
+    )
+    make.add_argument("--root", type=Path, default=Path("data/videos"))
+    make.add_argument(
+        "--force", action="append", default=[],
+        choices=["script", "spec", "audio", "draw", "letter", "render",
+                 "metadata", "thumbnail", "all"],
+        help="redo a stage that is already on disk; repeatable",
+    )
+    make.add_argument("--voice", default=None)
+    make.add_argument(
+        "--voice-backend", default=None,
+        choices=["omnivoice", "edge", "gemini"],
+        help="default omnivoice (local, no key); edge is a low-quality fallback",
+    )
+    make.add_argument("--model", default=None, help="diffusion model")
+    make.add_argument(
+        "--headline", default=None,
+        help="thumbnail text; defaults to the generated title",
+    )
+    make.add_argument(
+        "--dry-run", action="store_true",
+        help="split into beats and report the plan without generating anything",
+    )
+
+    subparsers.add_parser(
+        "doctor", help="check every local dependency the video pipeline needs"
+    )
+
+    pub = subparsers.add_parser(
+        "publish",
+        help="upload a rendered video to YouTube (private by default)",
+    )
+    pub.add_argument("slug", help="run name under --root, the video to publish")
+    pub.add_argument("--root", type=Path, default=Path("data/videos"))
+    pub.add_argument(
+        "--privacy", default="private", choices=["private", "unlisted", "public"],
+        help="private (default) appears only in your dashboard until you change it",
+    )
+    pub.add_argument("--headline", default=None,
+                     help="thumbnail text; defaults to the generated title")
+    pub.add_argument(
+        "--client-secret", type=Path,
+        default=Path.home() / ".config/contentforge/youtube_client_secret.json",
+    )
+    pub.add_argument(
+        "--token", type=Path,
+        default=Path.home() / ".config/contentforge/youtube_token.json",
+    )
+    pub.add_argument(
+        "--yes", action="store_true",
+        help="skip the confirmation prompt (for unattended runs)",
+    )
+
+    seen_cmd = subparsers.add_parser(
+        "seen", help="what happened to every lead, across all runs"
+    )
+    seen_cmd.add_argument(
+        "--path", type=Path, default=Path("docs/evidence/leads-seen.csv")
+    )
+    seen_cmd.add_argument(
+        "--todo", action="store_true", help="list posts whose screenshots are unread"
+    )
+
+    pots = subparsers.add_parser(
+        "potentials", help="show every channel verified so far"
+    )
+    pots.add_argument(
+        "--path", type=Path, default=Path("docs/evidence/potentials.csv")
+    )
+    pots.add_argument("--all", action="store_true", help="print every row")
+
     verify = subparsers.add_parser(
         "verify", help="check a claimed channel statistic against the API"
     )
@@ -221,6 +394,252 @@ def main(argv: list[str] | None = None) -> int:
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "illustrate":
+        from contentforge.visuals.illustrate import gpu_report, illustrate
+
+        print(f"  {gpu_report()}")
+        subjects = args.subjects or (
+            ["a dumbbell with a large dollar sign on one weight plate"]
+            if args.check else []
+        )
+        if not subjects:
+            raise MissingDataError(
+                "give at least one subject, or pass --check for a test image"
+            )
+        made = illustrate(
+            subjects, args.out, model=args.model,
+            width=args.width, height=args.height,
+        )
+        for item in made:
+            print(f"  {item.path}  seed={item.seed}")
+        return 0
+
+    if args.command == "doctor":
+        from contentforge.runtime import report
+
+        print(report())
+        return 0
+
+    if args.command == "make":
+        from contentforge import runtime
+        from contentforge.pipeline import beats_for, build_video, load_or_write_script
+
+        from contentforge.pipeline import ensure_script
+
+        run_dir = args.root / args.slug
+        script = args.script_file.read_text() if args.script_file else None
+        writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
+
+        if args.dry_run:
+            text, _ = ensure_script(run_dir, script, writer)
+            beats = beats_for(text)
+            print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
+            for index, beat in enumerate(beats, start=1):
+                print(f"  {index:3d}  {beat[:96]}")
+            return 0
+
+        all_stages = {"script", "spec", "audio", "draw", "letter", "render",
+                      "metadata", "thumbnail"}
+        stages = all_stages if "all" in args.force else set(args.force)
+
+        from contentforge import interrupt
+
+        # Ctrl-C (or SIGTERM) now stops between work items, keeping finished
+        # audio/images/frames on disk; re-running the same command resumes.
+        interrupt.arm()
+        try:
+            video = build_video(
+                run_dir=run_dir,
+                planner=runtime.spec_planner(),
+                speak=runtime.speaker(args.voice_backend, args.voice),
+                illustrator=runtime.illustrator(args.model),
+                upscaler=runtime.upscaler(),
+                renderer=runtime.renderer(),
+                metadata_writer=runtime.metadata_writer(),
+                headline=args.headline,
+                script=script,
+                scriptwriter=writer,
+                force=stages,
+            )
+        except interrupt.StopRequested:
+            print(f"\n  stopped safely. finished work is saved in {run_dir}/")
+            print(f"  resume by re-running: pipeline make {args.slug}")
+            return 130  # conventional exit code for interrupted-by-signal
+        print(f"\n  {video}")
+        print(f"  review everything in {run_dir}/ before `pipeline publish {args.slug}`")
+        return 0
+
+    if args.command == "publish":
+        from contentforge.pipeline import (
+            METADATA_NAME,
+            THUMBNAIL_NAME,
+            VIDEO_NAME,
+            load_metadata,
+        )
+        from contentforge.publish import youtube
+
+        run_dir = args.root / args.slug
+        video = run_dir / VIDEO_NAME
+        thumb = run_dir / THUMBNAIL_NAME
+        # Publish only uploads what `make` already produced and you reviewed;
+        # it generates nothing. Missing artefacts mean the video was not fully
+        # made, not that publish should quietly make them now.
+        for needed, what in ((video, "video"), (run_dir / METADATA_NAME, "metadata"),
+                             (thumb, "thumbnail")):
+            if not needed.exists():
+                raise MissingDataError(
+                    f"no {what} at {needed}; run `pipeline make {args.slug}` and "
+                    "review the run directory before publishing"
+                )
+        meta = load_metadata(run_dir)
+
+        print(f"  title:    {meta.title}")
+        print(f"  privacy:  {args.privacy}")
+        print(f"  tags:     {', '.join(meta.tags)}")
+        print(f"  video:    {video}")
+        print(f"  thumb:    {thumb}")
+        print(f"  (review {run_dir}/ — script.txt, metadata.json, subtitles, thumbnail)")
+        if not args.yes:
+            reply = input(f"\n  upload to YouTube as {args.privacy}? [y/N] ").strip().lower()
+            if reply != "y":
+                print("  aborted; nothing was uploaded")
+                return 0
+
+        creds = youtube.load_credentials(args.client_secret, args.token)
+        service = youtube.build_service(creds)
+        video_id = youtube.upload(service, video, meta, privacy=args.privacy)
+        youtube.set_thumbnail(service, video_id, thumb)
+        youtube.record_upload(run_dir, video_id, args.privacy)
+        print(f"\n  published: {youtube.watch_url(video_id)}")
+        return 0
+
+    if args.command == "seen":
+        from contentforge.research.seen import load_seen, summarise_seen, unsettled
+
+        rows = load_seen(args.path)
+        if not rows:
+            print(f"nothing seen yet at {args.path}")
+            return 0
+        print(summarise_seen(rows))
+        if args.todo:
+            print("\nscreenshots still unread:")
+            for row in unsettled(rows):
+                print(f"  @{row.author:<20} {row.claim[:70]}")
+                print(f"    {row.permalink}")
+        return 0
+
+    if args.command == "potentials":
+        from contentforge.research.potentials import load_potentials, summarise
+
+        rows = load_potentials(args.path)
+        if not rows:
+            print(f"no potentials yet at {args.path}")
+            return 0
+        print(summarise(rows))
+        if args.all:
+            print()
+            for row in rows:
+                print(
+                    f"  {row.standing or '-':<9} {row.label:<26} {row.subs:>9,} subs  "
+                    f"median {row.median:>9,}  {row.views_per_sub:>5.1f} v/sub"
+                )
+                print(f"            {row.url}")
+        return 0
+
+    if args.command == "leads":
+        from contentforge.providers.threads_research import search_threads
+        from contentforge.research.leads import gather_leads, save_leads
+
+        now = datetime.now(timezone.utc)
+        run_dir = args.out or Path("data/leads") / (
+            f"{now:%Y-%m-%d}-{args.source}-"
+            f"{re.sub(r'[^a-z0-9]+', '-', args.query.lower()).strip('-')}"
+        )
+        expander = None
+        if args.source == "reddit":
+            from contentforge.providers.reddit_research import search_reddit
+
+            def searcher(query, serp_type=""):
+                return search_reddit(query, subreddit=args.subreddit)
+
+            # Reddit's selftext is the whole post; there is nothing to expand.
+            if args.expand:
+                print("note: --expand does nothing for reddit (selftext is complete)")
+        else:
+            searcher = search_threads
+            if args.expand:
+                from contentforge.providers.threads_research import read_thread
+
+                expander = read_thread
+
+        gathered = gather_leads(
+            args.query,
+            run_dir,
+            search=searcher,
+            serp_type="tags" if args.tags else "default",
+            expand=expander,
+        )
+        save_leads(gathered, run_dir, args.query, now)
+        named = sum(1 for lead in gathered if lead.handles_from_text)
+        shots = sum(len(lead.image_paths) for lead in gathered)
+        steps = sum(len(lead.reply_image_paths) for lead in gathered)
+        print(f"{len(gathered)} posts -> {run_dir}")
+        print(f"  handles found in captions: {named}")
+        print(f"  screenshots downloaded:    {shots}")
+        print(f"  reply-step screenshots:    {steps}")
+
+        # Leads outlive their run directory: the run is gitignored, this is not.
+        from contentforge.research.seen import (
+            from_lead,
+            load_seen,
+            save_seen,
+            summarise_seen,
+            unsettled,
+            upsert_seen,
+        )
+
+        before = load_seen(args.seen)
+        settled_links = {row.permalink for row in before if row.settled}
+        already = sum(1 for lead in gathered if lead.permalink in settled_links)
+        after = upsert_seen(before, [from_lead(lead, now) for lead in gathered])
+        save_seen(args.seen, after)
+        print(f"  already settled in earlier runs: {already}")
+        print(f"  still needing a read:            {len(unsettled(after))}")
+        print()
+        print(summarise_seen(after))
+        print(
+            "\nNext: read the screenshots in "
+            f"{run_dir / 'images'} and record any channel names with\n"
+            "  add_image_handles(run_dir, {permalink: [handles]})\n"
+            f"then: pipeline leads-resolve {run_dir}   (API)\n"
+            f"then: pipeline leads-analyse {run_dir}   (free)"
+        )
+        return 0
+
+    if args.command == "threads":
+        from contentforge.providers.threads_research import (
+            read_profile,
+            search_threads,
+        )
+
+        if args.query.startswith("@"):
+            posts = read_profile(args.query)
+        else:
+            posts = search_threads(
+                args.query, serp_type="tags" if args.tags else "default"
+            )
+        for post in posts[: args.limit]:
+            print(f"@{post.author} [{post.posted_on}] {post.text}")
+            print(f"    {post.permalink}")
+        print(
+            f"\n{len(posts)} posts. These are unverified claims by strangers. "
+            f"Any channel named here costs 1 quota unit to check with "
+            f"`pipeline verify`; a claim naming no channel cannot be checked "
+            f"at all."
+        )
+        return 0
+
 
     api_key, ledger_path = _credential(args.profile)
 
@@ -239,6 +658,239 @@ def main(argv: list[str] | None = None) -> int:
             value = f"{reading.spent:,}" if reading.is_known else "UNKNOWN"
             print(f"  {quota_id:<24} {value}")
             print(f"                   {reading.detail}")
+        return 0
+
+    if args.command == "channel":
+        from contentforge.research.analytics import judge
+        from contentforge.research.authorship import channel_url, check_channel
+        from contentforge.research.leads import profile_views
+        from contentforge.research.potentials import (
+            from_profile,
+            load_potentials,
+            save_potentials,
+            upsert,
+        )
+
+        client = client_for()
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        # Accept a URL of either form; an id skips resolution entirely and,
+        # unlike a handle, cannot silently be the wrong channel (C-008).
+        target = args.handle.strip().rstrip("/").split("/")[-1]
+        if target.startswith("UC") and len(target) == 24:
+            stats, ledger = client.get_channels([target], ledger)
+            facts = stats[0]
+            label = target
+        else:
+            facts, ledger = client.channel_by_handle(target.lstrip("@"), ledger)
+            label = target.lstrip("@")
+        playlists, ledger = client.get_uploads_playlists([facts.channel_id], ledger)
+        ids, ledger = client.get_playlist_video_ids(
+            playlists[facts.channel_id], ledger, max_videos=50
+        )
+        videos, ledger = client.get_videos(ids, ledger)
+        save_ledger(ledger_path, ledger, now, started)
+
+        long_form = [v for v in videos if v.duration_seconds.value >= 120]
+        shorts = len(videos) - len(long_form)
+        age = (now - facts.published_at.value).days
+        print(f"{facts.title}   {facts.channel_id}")
+        print(f"  https://www.youtube.com/channel/{facts.channel_id}")
+        print(
+            f"  subs {facts.subscribers.value:,}   videos {facts.video_count.value}   "
+            f"lifetime views {facts.view_count.value:,}   age {age}d"
+        )
+        print(f"  sampled {len(videos)}: {len(long_form)} long-form, {shorts} shorts")
+        if not long_form:
+            raise MissingDataError("no long-form videos to profile")
+
+        record = profile_views([v.view_count.value for v in long_form])
+        operator = check_channel(channel_url(facts.channel_id), videos=3)
+        record.update(
+            channel_id=facts.channel_id,
+            handle=label,
+            title=facts.title,
+            subs=facts.subscribers.value,
+            operator=operator.kind,
+            operator_evidence=operator.evidence,
+            age_days=age,
+        )
+        verdict = judge(record)
+
+        # C-052: the sample is the 50 most recent videos. On a channel that
+        # peaked early the hits fall outside it and the profile describes only
+        # the aftermath. Lifetime mean against sampled mean detects that for
+        # free - both numbers are already fetched.
+        lifetime_mean = facts.view_count.value / max(facts.video_count.value, 1)
+        gap = lifetime_mean / max(record["mean"], 1)
+        if gap >= 3 and facts.video_count.value > len(videos):
+            print(
+                f"\n  ⚠ lifetime mean {lifetime_mean:,.0f} vs sampled mean "
+                f"{record['mean']:,.0f} ({gap:.0f}x). The unsampled older videos "
+                "hold most of the views - this profile describes recent output "
+                "only, and its skew is not the channel's skew (C-052)."
+            )
+
+        print(
+            f"\n  median {record['median']:,}   mean {record['mean']:,}   "
+            f"skew {record['skew']}   hit-rate {record['hit_rate']}%"
+        )
+        print(f"  range {record['min']:,} - {record['max']:,}   "
+              f"views/sub {record['median'] / max(facts.subscribers.value, 1):.1f}")
+        print(f"  operator: {operator.kind.upper()} — {operator.evidence[:90]}")
+        print(f"\n  VERDICT: {verdict.status.upper()}")
+        print(f"  {verdict.reason}")
+
+        merged = upsert(
+            load_potentials(args.potentials),
+            [from_profile(record, now, source=f"channel: @{args.handle}", verdict=verdict)],
+        )
+        save_potentials(args.potentials, merged)
+        print(f"\n  filed in {args.potentials}   quota spent {ledger.spent - started}")
+        print("\n  most-viewed long-form:")
+        for video in sorted(long_form, key=lambda v: -v.view_count.value)[:6]:
+            secs = video.duration_seconds.value
+            days = (now - video.published_at.value).days
+            print(f"   {video.view_count.value:>9,}  {secs // 60:>2}m{secs % 60:02d}s  "
+                  f"{days:>4}d  {video.title[:58]}")
+        return 0
+
+    if args.command == "leads-analyse":
+        from contentforge.research.analytics import judge_all, tally
+        from contentforge.research.leads import load_leads, write_report
+        from contentforge.research.potentials import (
+            from_profile,
+            load_potentials,
+            save_potentials,
+            summarise,
+            upsert,
+        )
+
+        path = args.run_dir / "measurements.json"
+        if not path.exists():
+            raise MissingDataError(
+                f"no measurements at {path}; run `pipeline leads-resolve "
+                f"{args.run_dir}` first"
+            )
+        measurements = json.loads(path.read_text())["measurements"]
+        query, gathered = load_leads(args.run_dir)
+        now = datetime.now(timezone.utc)
+
+        verdicts = judge_all(measurements)
+        by_id = {verdict.channel_id: verdict for verdict in verdicts}
+        (args.run_dir / "verdicts.json").write_text(
+            json.dumps([asdict(v) for v in verdicts], indent=2)
+        )
+
+        for measurement in measurements:
+            verdict = by_id[measurement["channel_id"]]
+            print(f"  {verdict.status:<9} @{measurement['handle']}")
+            print(f"            {verdict.reason}")
+
+        existing = load_potentials(args.potentials)
+        merged = upsert(
+            existing,
+            [
+                from_profile(
+                    m, now, source=m.get("permalink", ""), verdict=by_id[m["channel_id"]]
+                )
+                for m in measurements
+            ],
+        )
+        save_potentials(args.potentials, merged)
+        write_report(measurements, gathered, args.run_dir, query)
+
+        counts = tally(verdicts)
+        print(f"\n{counts}")
+        print(f"Potentials: {args.potentials} (+{len(merged) - len(existing)} new)")
+        print(summarise(merged))
+        return 0
+
+    if args.command == "leads-resolve":
+        from contentforge.research.authorship import channel_url, check_channel
+        from contentforge.research.leads import load_leads, profile_views
+        from contentforge.research.seen import (
+            LOOKUP_FAILED,
+            NO_CHANNEL,
+            VERIFIED,
+            load_seen,
+            mark,
+            save_seen,
+        )
+
+        query, gathered = load_leads(args.run_dir)
+        client = client_for()
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        measurements = []
+        for lead in gathered:
+            for handle in lead.all_handles:
+                try:
+                    facts, ledger = client.channel_by_handle(handle, ledger)
+                    playlists, ledger = client.get_uploads_playlists(
+                        [facts.channel_id], ledger
+                    )
+                    ids, ledger = client.get_playlist_video_ids(
+                        playlists[facts.channel_id], ledger, max_videos=50
+                    )
+                    videos, ledger = client.get_videos(ids, ledger)
+                except ContentforgeError as error:
+                    print(f"  @{handle}: {str(error)[:90]}")
+                    continue
+                long_form = [
+                    v.view_count.value for v in videos if v.duration_seconds.value >= 120
+                ]
+                if not long_form:
+                    print(f"  @{handle}: no long-form videos")
+                    continue
+                record = profile_views(long_form)
+                # Free, no quota: is this a faceless operation or a person?
+                # Selecting an exemplar without asking cost this project a week
+                # (C-048).
+                operator = check_channel(channel_url(facts.channel_id))
+                record.update(
+                    channel_id=facts.channel_id,
+                    handle=handle,
+                    title=facts.title,
+                    subs=facts.subscribers.value,
+                    permalink=lead.permalink,
+                    operator=operator.kind,
+                    operator_evidence=operator.evidence,
+                )
+                measurements.append(record)
+                flag = "  [PERSONAL BRAND]" if operator.is_personal else ""
+                print(
+                    f"  @{handle}: {facts.subscribers.value:,} subs, "
+                    f"median {record['median']:,}, skew {record['skew']}{flag}"
+                )
+        save_ledger(ledger_path, ledger, now, started)
+        (args.run_dir / "measurements.json").write_text(
+            json.dumps(
+                {"query": query, "resolved_at": now.isoformat(),
+                 "measurements": measurements},
+                indent=2,
+            )
+        )
+
+        seen_rows = load_seen(args.seen)
+        resolved = {m["permalink"] for m in measurements}
+        for lead in gathered:
+            if lead.permalink in resolved:
+                handles = " ".join(
+                    m["handle"] for m in measurements if m["permalink"] == lead.permalink
+                )
+                seen_rows = mark(seen_rows, lead.permalink, VERIFIED, handles)
+            elif lead.all_handles:
+                seen_rows = mark(seen_rows, lead.permalink, LOOKUP_FAILED)
+            elif lead.handles_from_images or not lead.image_paths:
+                seen_rows = mark(seen_rows, lead.permalink, NO_CHANNEL)
+        save_seen(args.seen, seen_rows)
+
+        print(f"\n{len(measurements)} measurements -> {args.run_dir / 'measurements.json'}")
+        print(f"Quota spent: {ledger.spent - started}")
+        print(f"Next: pipeline leads-analyse {args.run_dir}   (free, re-runnable)")
         return 0
 
     if args.command == "verify":

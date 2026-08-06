@@ -2,7 +2,46 @@
 name = "contentforge"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["google-api-python-client>=2.0"]
+dependencies = [
+    "edge-tts>=7.0",
+    "google-api-python-client>=2.0",
+    # Lettering, the sheet and the palette correction are all production paths,
+    # not optional extras: a frame without them does not match the reference.
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# Local image generation. Kept optional so research and publishing still work
+# on a machine with no GPU. Install torch from the CUDA index first - see
+# docs/setup/local-image-generation.md; plain `pip install torch` silently
+# fetches the CPU-only build.
+gpu = [
+    "torch>=2.4",
+    "diffusers>=0.30",
+    "transformers>=4.44",
+    "accelerate>=0.33",
+    "safetensors>=0.4",
+    # The default image model (Qwen-Image) is a 20B GGUF model streamed on a 6 GB
+    # card by mmgp (Memory Management for the GPU Poor); optimum-quanto is its
+    # qint8 backend. Weights are pre-quantised once via scripts/build_prequant.py.
+    # See docs/setup/local-image-generation.md.
+    "mmgp>=3.7",
+    "optimum-quanto>=0.2",
+]
+# Publishing to YouTube. Kept optional so research and rendering need no Google
+# auth libraries. google-api-python-client is already a core dependency; these
+# add the OAuth user-consent flow that uploading (unlike scraping) requires.
+publish = [
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+]
+# Local, offline narration via OmniVoice voice cloning. Needs a GPU. torchaudio
+# must match the installed torch (see docs/setup/local-voice.md). WeTextProcessing
+# is optional - it expands numbers for narration and is used when present.
+voice = [
+    "omnivoice>=0.2",
+    "soundfile>=0.12",
+]
 
 [project.scripts]
 pipeline = "contentforge.cli:main"

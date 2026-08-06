@@ -1,7 +1,14 @@
 # contentforge — Design
 
 **Date:** 2026-07-26
-**Status:** Approved, pending implementation plan
+**Status:** Approved, pending implementation plan — **partially invalidated 2026-07-29**
+
+> **Check [claims-ledger.md](../../findings/claims-ledger.md) before acting on any
+> claim in this document.** Evidence gathered on 2026-07-29 refuted several premises
+> it was written on, including that asset polish drives views (C-011), that the
+> "Every X Explained" format carries value on its own (C-010), and every channel
+> ranking based on mean views-per-video (C-001). Sections not touched by those
+> claims still stand.
 
 ## 1. Goal
 
@@ -27,20 +34,36 @@ Milestones, per current YouTube policy:
 - **Tier 1 (first money):** 500 subscribers + 3,000 watch hours (or 3M Shorts views) in 90 days. Unlocks Super Thanks, Memberships, Shopping. **This is the 90-day target.**
 - **Tier 2 (ad revenue):** 1,000 subscribers + 4,000 watch hours in 12 months (or 10M Shorts views in 90 days).
 
+⚠️ **Every RPM figure in this section is marketing-blog sourced and unverified**
+(C-034). The only measured evidence available — two YouTube Studio screenshots —
+computes to **$3.92 and $3.93 per 1,000 views** (C-040), below every US figure
+quoted here. Treat these as directional at best; real RPM is knowable only from
+our own Studio data.
+
 Format economics justify the Shorts→long-form strategy: India Shorts RPM runs ₹5–30 against ₹50–200 for long-form, with finance/tech long-form reaching ₹80–250. The same English content aimed at US/UK professionals runs $2–4 RPM. Shorts buy subscribers; long-form monetizes them.
 
 Threads pays creators nothing — no payout program exists as of 2026. It is a traffic source, not a revenue line.
 
 ## 4. The policy problem, and how the architecture answers it
 
-YouTube's "inauthentic content" policy (renamed 2026-07-15) disqualifies two things this project would otherwise produce by default:
+YouTube's "inauthentic content" policy (renamed 2025-07-15) disqualifies two things this project would otherwise produce by default:
 
 1. *"Mass-produced templates reused across multiple videos with the same structure and content patterns."*
 2. *"Readings of other materials you did not create — text from websites read verbatim."*
 
 At 1–2 hrs/week of approve-reject, the operator is not adding differentiation by hand. Therefore the pipeline must generate it structurally. Two mechanisms, both enforced in code:
 
-- **Per-video narrative structure.** The generator selects a shape from several based on what the sources support — a contested claim becomes a tension piece, comparable data points become a ranking, a single primary document becomes an explainer. No two consecutive videos share a shape. There is no script template in this codebase.
+- **Per-video narrative structure.** ⚠️ **Revised 2026-07-30.** This originally
+  read "no two consecutive videos share a shape; there is no script template in
+  this codebase." The evidence contradicts it: every channel measured runs a
+  **rigid** template, and opening style is a channel-level constant rather than a
+  per-video variable (C-027). Art History Explained uses the identical structure
+  nine times for a 111,040 median. Deliberately varying structure would be
+  copying the losers.
+  What actually satisfies the policy is **per-video authored substance** — each
+  video carrying research specific to its subject, not a name substituted into a
+  frame (C-032). The template is the format; the substance is the differentiator.
+  The generator therefore holds structure fixed and varies content.
 - **Verbatim-overlap ceiling.** `script/validate.py` rejects any script whose overlap with any source exceeds a threshold. This is what keeps sourced content out of the "readings of other materials" bucket.
 
 Separately, YouTube requires disclosing synthetic content that realistically depicts real people or events, enforced by a three-strike ladder ending in permanent YPP removal. TTS narration over licensed stock imagery is not believed to trigger this, but the publish stage carries an explicit disclosure flag, defaulting to set whenever imagery depicts a real person or event.
@@ -71,16 +94,23 @@ providers/                       thin API clients, every record provenanced
   instagram_research.py          instagrapi. Throwaway account. ToS-violating. (Plan 3)
   instagram_publish.py           Graph API. Real Business account. Never shares creds. (Plan 4)
   threads_publish.py             Official Threads API (Plan 4)
-  threads_research.py            NOT IMPLEMENTED until Apify. Absent = "not collected".
+  threads_research.py            IMPLEMENTED 2026-07-30 — Jina Reader, no key, no
+                                 quota. The assumption that this needed Apify or
+                                 App Review was wrong for *reading* (C-038);
+                                 publishing still needs the official API.
+  reddit_research.py             OpenCLI browser bridge. Full post bodies and an
+                                 engagement score (C-043).
   llm.py                         OpenAI-compatible; base_url from config (Plan 2)
 
 research/
-  discover.py                    seed queries → candidate channels
-  trajectory.py                  per-video view curves → inflection detection
-  changes.py                     what differed pre- vs post-inflection
-  niches.py                      niche table: RPM, geography, monetization restrictions
-  score.py                       ranking
-  report.py                      json + markdown output
+  leads.py                       gather claims + screenshots from a source
+  analytics.py                   pure: measurements → verdict + reason
+  potentials.py                  cumulative verified-channel list, keyed on id
+  seen.py                        every lead and what became of it, across runs
+  niches.py                      niche table (RPM figures unverified — C-034)
+  discover.py / trajectory.py / changes.py / score.py / report.py
+                                 the two failed research engines. Superseded by
+                                 the lead loop; kept for the record (C-026).
 
 sourcing/                        primary docs (Plan 2)
 script/                          generation + provenance validator (Plan 2)
