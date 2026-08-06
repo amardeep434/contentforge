@@ -36,19 +36,21 @@ from contentforge.visuals.compose import (
 )
 from contentforge.voice.backends import Clip, measure_duration, synthesise_beats
 
-SCRIPT_NAME = "script.txt"
-SPEC_NAME = "spec.json"
-MANIFEST_NAME = "manifest.json"
-VIDEO_NAME = "video.mp4"
-METADATA_NAME = "metadata.json"
-THUMBNAIL_NAME = "thumbnail.png"
-STATUS_NAME = "status.json"
-RUNLOG_NAME = "run.log"
+# Artefact paths, each already prefixed with its run-dir sub-root, so
+# `run_dir / NAME` lands in work/ meta/ or final/ with no per-site path surgery.
+SCRIPT_NAME = "meta/script.txt"
+SPEC_NAME = "meta/spec.json"
+MANIFEST_NAME = "meta/manifest.json"
+STATUS_NAME = "meta/status.json"
+RUNLOG_NAME = "meta/run.log"
+METADATA_NAME = "final/metadata.json"
+THUMBNAIL_NAME = "final/thumbnail.png"
+VIDEO_NAME = "final/video.mp4"
 
-AUDIO_DIR = "audio"
-RAW_DIR = "raw"
-FRAME_DIR = "frames"
-WORK_DIR = "work"
+AUDIO_DIR = "work/audio"
+RAW_DIR = "work/raw"
+FRAME_DIR = "work/frames"
+WORK_DIR = "work/ffmpeg"
 
 #: Every stage, in order. metadata and thumbnail only run when a metadata writer
 #: is supplied, so the planned set is trimmed for a bare render (see build_video).
@@ -86,6 +88,7 @@ class RunLog:
         self.stages: list[Stage] = []
         self._planned = list(planned)
         self.status = {name: "pending" for name in planned}
+        self._status_path.parent.mkdir(parents=True, exist_ok=True)
         self._flush()
 
     def _append(self, line: str) -> None:
@@ -142,20 +145,20 @@ def _clear(paths: list[Path]) -> None:
             path.unlink()
 
 
-def run_dir_for(root: Path, slug: str) -> Path:
-    return root / slug
+def run_dir_for(root: Path, niche: str, slug: str) -> Path:
+    return root / niche / "videos" / slug
 
 
 # --- script -----------------------------------------------------------------
 
-SOURCES_NAME = "sources.json"
+SOURCES_NAME = "meta/sources.json"
 
 
 def load_or_write_script(run_dir: Path, script: str | None) -> str:
     """The script is the one artefact a human may hand-write."""
     path = run_dir / SCRIPT_NAME
     if script is not None:
-        run_dir.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(script.strip() + "\n")
     if not path.exists():
         raise MissingDataError(
@@ -193,7 +196,7 @@ def ensure_script(run_dir: Path, script: str | None,
         # No cached script and nothing to generate from.
         return load_or_write_script(run_dir, None), Stage("script", "loaded")
 
-    run_dir.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     text = writer(run_dir).strip()
     if not text:
         raise MissingDataError("script generation produced nothing to narrate")
@@ -258,7 +261,7 @@ def ensure_spec(run_dir: Path, beats: list[str],
         return specs, Stage("spec", f"{len(specs)} beats, cached", skipped=True)
 
     specs = planner(beats)
-    run_dir.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_spec_to_json(specs))
     lettered = sum(1 for spec in specs if spec.has_lettering)
     return specs, Stage("spec", f"{len(specs)} beats, {lettered} with lettering")
@@ -405,8 +408,8 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
 
 # --- render -----------------------------------------------------------------
 
-SUBS_SRT = "subtitles.srt"
-SUBS_VTT = "subtitles.vtt"
+SUBS_SRT = "final/subtitles.srt"
+SUBS_VTT = "final/subtitles.vtt"
 
 
 def write_subtitles(run_dir: Path, shots) -> None:
@@ -419,6 +422,7 @@ def write_subtitles(run_dir: Path, shots) -> None:
     from contentforge.render.subtitles import cues_from_shots, to_srt, to_vtt
 
     cues = cues_from_shots(shots)
+    (run_dir / "final").mkdir(parents=True, exist_ok=True)
     (run_dir / SUBS_SRT).write_text(to_srt(cues))
     (run_dir / SUBS_VTT).write_text(to_vtt(cues))
 
@@ -431,6 +435,7 @@ def ensure_video(run_dir: Path, clips: list[Clip], frames: list[Path],
     if out_path.exists() and not force:
         return out_path, Stage("render", f"{out_path}, cached", skipped=True)
 
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     renderer(shots, out_path, run_dir / WORK_DIR)
     if not out_path.exists() or out_path.stat().st_size == 0:
         raise MissingDataError(f"{out_path} is missing or empty after rendering")
@@ -481,6 +486,7 @@ def ensure_metadata(run_dir: Path, script: str, sources: list,
         return meta, Stage("metadata", f"{meta.title!r}, cached", skipped=True)
 
     meta = writer(script, sources)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_metadata_to_json(meta))
     return meta, Stage("metadata", f"{meta.title!r}, {len(meta.tags)} tags")
 
@@ -495,6 +501,7 @@ def ensure_thumbnail(run_dir: Path, frames: list[Path], headline: str,
         return path, Stage("thumbnail", f"{path}, cached", skipped=True)
     if not frames:
         raise MissingDataError("no finished frames to build a thumbnail from")
+    path.parent.mkdir(parents=True, exist_ok=True)
     thumbnail.compose(frames[0], headline, path)
     return path, Stage("thumbnail", f"{path} ({headline!r})")
 
@@ -609,6 +616,7 @@ def write_manifest(run_dir: Path, beats: list[str], specs: list[BeatSpec],
     cannot be corrected - only regenerated and hoped over.
     """
     path = run_dir / MANIFEST_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
         "video": str(video),
         "duration_s": round(sum(clip.duration_s for clip in clips), 2),
@@ -639,5 +647,5 @@ def clean_run(run_dir: Path, keep_script: bool = True) -> None:
     ) else None
     shutil.rmtree(run_dir)
     if script is not None:
-        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / SCRIPT_NAME).parent.mkdir(parents=True, exist_ok=True)
         (run_dir / SCRIPT_NAME).write_text(script)

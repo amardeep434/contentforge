@@ -224,7 +224,7 @@ def test_a_failed_stage_is_recorded_durably_with_what_remains(tmp_path):
     with pytest.raises(RuntimeError, match="simulated OOM in draw"):
         build(tmp_path, fakes)
 
-    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    status = json.loads((tmp_path / "run" / "meta" / "status.json").read_text())
     stages = status["stages"]
     assert stages["script"] == "ok"
     assert stages["spec"] == "ok"
@@ -236,7 +236,7 @@ def test_a_failed_stage_is_recorded_durably_with_what_remains(tmp_path):
     assert "render" in status["remaining"]
     assert "simulated OOM in draw" in status["error"]
     # the human trail exists too
-    assert "FAILED" in (tmp_path / "run" / "run.log").read_text()
+    assert "FAILED" in (tmp_path / "run" / "meta" / "run.log").read_text()
 
 
 def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
@@ -255,7 +255,7 @@ def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
     finally:
         interrupt.clear()
 
-    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    status = json.loads((tmp_path / "run" / "meta" / "status.json").read_text())
     stages = status["stages"]
     assert stages["script"] == "ok"
     assert stages["spec"] == "ok"
@@ -264,7 +264,7 @@ def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
     assert status["stopped"] == "audio"
     assert "draw" in status["remaining"]
     assert "error" not in status  # a stop is not an error
-    assert "STOPPED" in (tmp_path / "run" / "run.log").read_text()
+    assert "STOPPED" in (tmp_path / "run" / "meta" / "run.log").read_text()
 
 
 def test_an_upscaler_that_writes_nothing_raises(tmp_path):
@@ -285,9 +285,9 @@ def test_cleaning_keeps_the_hand_written_script(tmp_path):
     build(tmp_path, Fakes(headings=False))
     run_dir = tmp_path / "run"
     clean_run(run_dir)
-    assert (run_dir / "script.txt").exists()
+    assert (run_dir / "meta" / "script.txt").exists()
     assert not (run_dir / SPEC_NAME).exists()
-    assert not (run_dir / "video.mp4").exists()
+    assert not (run_dir / "final" / "video.mp4").exists()
 
 
 # --- script generation (stage 0) --------------------------------------------
@@ -303,6 +303,7 @@ def test_a_provided_script_is_used_verbatim(tmp_path):
 def test_a_cached_script_is_reused_and_the_writer_not_called(tmp_path):
     from contentforge.pipeline import SCRIPT_NAME, ensure_script
 
+    (tmp_path / SCRIPT_NAME).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / SCRIPT_NAME).write_text("Cached narration here.\n")
     called = []
     text, stage = ensure_script(tmp_path, None,
@@ -325,6 +326,7 @@ def test_the_writer_generates_when_nothing_exists(tmp_path):
 def test_forcing_script_regenerates_over_a_cached_one(tmp_path):
     from contentforge.pipeline import SCRIPT_NAME, ensure_script
 
+    (tmp_path / SCRIPT_NAME).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / SCRIPT_NAME).write_text("old\n")
     text, _ = ensure_script(tmp_path, None, writer=lambda d: "fresh [1]", force=True)
     assert text == "fresh [1]"
@@ -354,7 +356,7 @@ def test_build_video_generates_a_script_when_given_a_writer(tmp_path):
         script=None,
         scriptwriter=lambda d: SCRIPT,
     )
-    assert (tmp_path / "run" / "script.txt").read_text().startswith("A ceiling fan")
+    assert (tmp_path / "run" / "meta" / "script.txt").read_text().startswith("A ceiling fan")
     assert len(fakes.rendered[0]) == 3
 
 
@@ -470,3 +472,24 @@ def test_forcing_metadata_regenerates_it(tmp_path):
     build(tmp_path, Fakes(headings=False), script=None, metadata_writer=writer,
           force={"metadata"})
     assert len(calls) == 2
+
+
+def test_run_dir_is_grouped_by_niche(tmp_path):
+    from contentforge.pipeline import run_dir_for
+
+    assert run_dir_for(tmp_path, "biz", "laundromat") == (
+        tmp_path / "biz" / "videos" / "laundromat"
+    )
+
+
+def test_build_writes_into_work_meta_final(tmp_path):
+    fakes = Fakes()
+    build(tmp_path, fakes)                 # run_dir defaults to tmp_path / "run"
+    run = tmp_path / "run"
+    assert (run / "meta" / "spec.json").exists()
+    assert (run / "meta" / "status.json").exists()
+    assert (run / "meta" / "manifest.json").exists()
+    assert (run / "work" / "audio").is_dir()
+    assert (run / "work" / "raw").is_dir()
+    assert (run / "final" / "video.mp4").exists()
+    assert (run / "final" / "subtitles.srt").exists()
