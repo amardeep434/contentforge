@@ -530,3 +530,51 @@ are reviewable from the host (a docker `-v` bind for `data/videos`, plus the con
 `--root`), and `container_memory` -> ~40960 for Qwen (§11). hermes must send **SIGTERM** (not
 SIGKILL) to stop a render gracefully - the in-process handler needs the signal to reach the pipeline.
 All hermes-config, not code.
+
+---
+
+## 13. hermes provisioned + the nvidia-Vulkan fix (task 3 — DONE, verified)
+
+The sandbox is provisioned and a **full video was rendered end to end inside it** (Qwen images,
+OmniVoice narration, nvidia-Vulkan upscale, ffmpeg render -> `video.mp4` + thumbnail on the host at
+`/home/amardeep/hermes-videos/verify-test/`). Task 5 (**sync main checkout**) also done — local
+`master` fast-forwarded to the merge commit `ed7640e`.
+
+**Config (`~/.hermes/config.yaml` -> `terminal`):** `docker_image: contentforge-sandbox:latest`,
+`container_memory: 40960`, `container_disk: 102400`, `lifetime_seconds: 43200`,
+`daemon_term_grace_seconds: 300`, `docker_extra_args` adds `-v /home/amardeep/hermes-videos:/root/videos`,
+`docker_env` = omnivoice + `CONTENTFORGE_VOICE_REFERENCE` + `CONTENTFORGE_IMAGE_MODEL=qwen` (dead
+Gemini key removed). Scripts on host: **`~/hermes-provision.sh`** (idempotent: build image, copy
+~60 GB weights/voice/upscaler/fonts, refresh source from the **main checkout**, pip the exact host
+stack, verify with doctor) and **`~/hermes-sandbox.Dockerfile`**.
+
+**Render model in hermes:** a Qwen video is ~10 h but a hermes command times out in minutes, so the
+render is **launched detached** (`setsid pipeline make … --root /root/videos &`) and **polled** via
+`status.json`. `lifetime_seconds`/`grace` were raised for this. Two skills written:
+`~/.hermes/skills/contentforge-video` (start a render) and `contentforge-render-status`
+(check/resume/stop across sessions).
+
+**THE nvidia-Vulkan root cause (operator pushed to fix on nvidia, not fall back).** The upscaler
+`realesrgan-ncnn-vulkan` failed in-container with `vkCreateInstance failed -9` / "Could not get
+vkCreateInstance via vk_icdGetInstanceProcAddr for libGLX_nvidia.so.0". Not a broken driver — the
+**host works**. The nvidia-container-toolkit injects nvidia's *vendor* libs (`libGLX_nvidia`,
+`libEGL_nvidia`) but **not the GLVND *dispatch* layer** (`libEGL.so.1`, `libGLX.so.0`) that nvidia's
+combined lib dlopens at init (found via `strace`: `libEGL.so.1` ENOENT everywhere). The base image
+lacked it. **Fix: `libglvnd0` (+ `libgl1 libegl1 libglx0`) in the custom image** — then the
+passed-through nvidia GPU does the upscale at **~2.8 s/image, byte-identical to the host**
+(6119983 bytes). The custom image also adds the Vulkan loader (`libvulkan1`), a static `ffmpeg`
+(base image has none), and `mesa-vulkan-drivers` as a CPU (llvmpipe) fallback.
+
+**Also learned:** `--gpus=all` defaults `NVIDIA_DRIVER_CAPABILITIES` to `compute,utility`; set
+`all` for graphics/Vulkan (necessary but not sufficient — the GLVND dispatch libs were the real gap).
+torch 2.6+cu124 runs fine on the sandbox's **python3.11** (host is 3.13); qint8 safetensors are
+python-agnostic.
+
+**Last activation step (operator, when convenient):** the live agent container still runs the OLD
+image. `docker rm -f $(docker ps -q -f name=hermes-)` + `systemctl --user restart
+hermes-gateway.service`, then one agent command recreates it as `contentforge-sandbox:latest` (40 GB,
+mount, nvidia Vulkan). Verify: `docker inspect … --format '{{.Config.Image}} {{.HostConfig.Memory}}'`.
+
+**⚠️ Secrets note:** the hermes config held three secrets that also surfaced in this session's logs —
+the tinyproxy `scraper` password, the (dead) Gemini AQ key (now removed from config), and the
+OmniRoute token. **Rotate** if the transcript is shared (task 6).
