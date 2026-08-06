@@ -351,38 +351,69 @@ or checklist item is too long. Shorten it in `spec.json` and rerun `letter`.
 
 ## 6. Running it under hermes — deployment checklist
 
-The pipeline runs inside the hermes Docker sandbox, but the sandbox has to be
-**provisioned for the current stack (Qwen + OmniVoice)**. This is a checklist,
-and some of it is not yet done — work through it before expecting a render to
-succeed inside the container.
+The pipeline runs inside the hermes Docker sandbox, provisioned for the current
+stack (Qwen + OmniVoice). **This has been done and verified** — a full video was
+rendered end to end inside the sandbox (Qwen images, OmniVoice narration,
+nvidia-Vulkan upscale, `video.mp4` on the host). The one-time provisioning is
+scripted in `~/hermes-provision.sh`; the checklist below is what it sets up, so a
+rebuild or a second machine is reproducible.
+
+**Renders are launched detached and polled, not run as a blocking command.** A
+Qwen video is ~10 h and a hermes terminal command times out in minutes, so the
+agent runs `setsid pipeline make … --root /root/videos &` and polls
+`status.json` (see the `contentforge-video` / `contentforge-render-status`
+skills). `terminal.lifetime_seconds` is raised so the container survives the run,
+and `daemon_term_grace_seconds` is raised so a SIGTERM can finish the current
+image before stopping.
 
 1. **GPU passthrough.** `nvidia-container-toolkit` on the host, then
    `--gpus=all` in the hermes `terminal.docker_extra_args`. Without the toolkit
    the flag fails every `docker run`, so install the toolkit first, add the flag
    second.
 
-2. **Memory — `container_memory` must be ~`40960` (40 GB).** Qwen's inference
+2. **Custom sandbox image (needed for the upscaler).** Set
+   `terminal.docker_image: contentforge-sandbox:latest`, built from
+   `~/hermes-sandbox.Dockerfile` (base image + `libvulkan1 libglvnd0 libgl1
+   libegl1 libglx0 mesa-vulkan-drivers` + a static `ffmpeg`/`ffprobe`).
+   **Why:** Real-ESRGAN (`realesrgan-ncnn-vulkan`) needs a Vulkan loader **and**
+   the GLVND dispatch layer. The nvidia-container-toolkit injects nvidia's vendor
+   libs (`libGLX_nvidia`, `libEGL_nvidia`) at runtime but **not** the GLVND
+   dispatch libs (`libEGL.so.1`, `libGLX.so.0`) that nvidia's combined lib
+   dlopens at init — without `libglvnd0` the nvidia Vulkan ICD returns NULL
+   (`Could not get vkCreateInstance`) and the upscaler finds no GPU. With it, the
+   passed-through nvidia GPU does the upscale at ~2.8 s/image, byte-identical to
+   the host. mesa is kept as a CPU (llvmpipe) fallback.
+
+3. **Memory — `container_memory` must be ~`40960` (40 GB).** Qwen's inference
    peak is ~36 GB of *system* RAM, because the model is streamed from CPU RAM.
    The old `12288` was sized for sdxl-turbo and will get Qwen **SIGKILLed**
    mid-draw — a cgroup RAM kill is uncatchable, so no graceful stop can save it.
    The host has 58 GB, so 40 GB fits.
 
-3. **Host-mounted run directory.** Bind-mount the `--root`/`data` directory into
-   the container (`-v`) so the assets are reviewable from the host as they land.
+4. **Host-mounted run directory.** Bind-mount the `--root`/`data` directory into
+   the container (`-v /home/amardeep/hermes-videos:/root/videos`) so the assets
+   are reviewable from the host as they land; the agent runs
+   `pipeline make … --root /root/videos`.
 
-4. **Stop with SIGTERM, not SIGKILL.** hermes must send `SIGTERM` to stop a
+5. **Stop with SIGTERM, not SIGKILL.** hermes must send `SIGTERM` to stop a
    render gracefully. `SIGKILL` still frees memory, but it skips the "finish the
    current item" grace, so it can leave the current item half-done.
 
-5. **Copy the assets into the sandbox** (they are not downloaded there):
+6. **Copy the assets into the sandbox** (they are not downloaded there) — the
+   sandbox home is root-owned, so copy via a root container mounting it:
    - the pre-quantised **qint8 weights** (~32 GB),
    - the `Qwen/Qwen-Image` and Freepik component directories,
    - the **OmniVoice** model plus the Iapetus reference wav,
-   - and `pip install` **mmgp**, **optimum-quanto**, **omnivoice**, **soundfile**
-     in the container.
+   - `pip install --user` the **exact host versions** into `/root/.local` (the
+     sandbox is python3.11, the host 3.13; the qint8 files are python-agnostic):
+     `torch==2.6.0 torchaudio==2.6.0` (cu124), `diffusers==0.39.0
+     transformers==5.14.1 accelerate safetensors mmgp optimum-quanto omnivoice
+     soundfile WeTextProcessing`, then `-e` the contentforge source.
+   (`libvulkan`, `libglvnd0` and `ffmpeg` come from the custom image, step 2.)
 
-6. **Set `docker_env`:**
+7. **Set `docker_env`:**
    - `CONTENTFORGE_VOICE_BACKEND=omnivoice`
+   - `CONTENTFORGE_VOICE_REFERENCE=/root/.local/share/contentforge/voices/iapetus-reference.wav`
    - `CONTENTFORGE_IMAGE_MODEL=qwen`
    - `CONTENTFORGE_LLM_BASE_URL=http://172.21.0.1:20128/v1` (the bridge gateway
      to OmniRoute)
@@ -390,7 +421,7 @@ succeed inside the container.
      diffusers (see local-image-generation.md). Weights still load from the
      copied cache; only the tiny metadata check goes online, through the proxy.
 
-7. **Reaching OmniRoute.** The sandbox has no route to the host and a
+8. **Reaching OmniRoute.** The sandbox has no route to the host and a
    default-deny egress proxy. One `ufw` rule allows the egress subnet to reach
    the API port, and the OmniRoute host is added to the proxy whitelist. That is
    why the base URL above is the bridge gateway (`172.21.0.1`) rather than
