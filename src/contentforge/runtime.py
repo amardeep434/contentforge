@@ -16,6 +16,25 @@ from typing import Callable
 
 from contentforge.errors import MissingDataError
 
+# On a 6 GB card the stages run one model after another (voice, then the image
+# model), and PyTorch's default caching allocator fragments across the many
+# sequential image generations - a real end-to-end run OOM'd 130 MB short with
+# 800 MB "reserved but unallocated". expandable_segments lets that reserved
+# memory be reused. Must be set before torch initialises CUDA, so it lives at
+# import of this module (imported before any model loads) and only if unset.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+#: Qwen-Image draws the house line-art style best and is the only model that
+#: obeys "stick figure" instead of drawing a detailed person, so it is the model
+#: for *every* final render - one video looks like one video. It is a GGUF model
+#: streamed by mmgp to fit a 6 GB card (see visuals/gguf_backends.py), at ~4 s...
+#: ~4 min/image; a full video is an overnight batch, which the resumable stages
+#: are built for. If it cannot load, the render fails loudly rather than shipping
+#: a lower-quality video from a different model. FLUX.1-schnell and sdxl-turbo
+#: stay selectable via CONTENTFORGE_IMAGE_MODEL, but only as an explicit *draft*
+#: pass to check script/pacing before committing to the slow Qwen final.
+DEFAULT_IMAGE_MODEL = "qwen"
+
 #: OmniVoice, local and offline. Gemini was the choice until Google restricted
 #: the account to AQ-prefix keys its own API rejects (401, unresolved Google-side
 #: regression). OmniVoice clones the exact voice we selected (Iapetus) from a
@@ -138,7 +157,12 @@ class _GpuSpeaker:
 
             gc.collect()
             if torch.cuda.is_available():
+                # empty_cache alone left ~1.6 GB of the voice model resident in a
+                # real run; synchronize + ipc_collect return it so the image
+                # model has the whole card.
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
         except Exception:
             pass
 
@@ -198,24 +222,57 @@ def illustrator(model: str | None = None, width: int | None = None,
     it per image would add roughly ten seconds each, which over 200 beats is
     half an hour of doing nothing.
     """
-    from contentforge.visuals.illustrate import DEFAULT_MODEL, illustrate, load_pipeline
+    from contentforge.visuals import gguf_backends
+    from contentforge.visuals.illustrate import illustrate, load_pipeline
 
-    name = model or os.environ.get(ENV_IMAGE_MODEL, DEFAULT_MODEL)
-    size = (
-        width or int(os.environ.get(ENV_IMAGE_WIDTH, 768)),
-        height or int(os.environ.get(ENV_IMAGE_HEIGHT, 432)),
-    )
-    loaded = None
+    name = model or os.environ.get(ENV_IMAGE_MODEL, DEFAULT_IMAGE_MODEL)
+    w = width or int(os.environ.get(ENV_IMAGE_WIDTH, 768))
+    h = height or int(os.environ.get(ENV_IMAGE_HEIGHT, 432))
+    # loaded once on first draw and reused: reloading per beat would add the full
+    # model-load cost (tens of seconds) to every one of ~200 beats.
+    state: dict = {"pipeline": None, "generate": None, "release": None, "ready": False}
+
+    def _prepare() -> None:
+        # A GGUF model (Qwen, or FLUX/sdxl chosen for a draft) is streamed by
+        # mmgp; anything else goes through the plain diffusers path. Loading
+        # failures propagate: a final render must not silently swap models.
+        if gguf_backends.is_gguf_model(name):
+            _, state["generate"], state["release"] = (
+                gguf_backends.load_pipeline_and_generate(name, w, h)
+            )
+        else:
+            state["pipeline"] = load_pipeline(name)
+        state["ready"] = True
 
     def draw(subjects: list[str], out_dir: Path) -> list:
-        nonlocal loaded
-        if loaded is None:
-            loaded = load_pipeline(name)
+        if not state["ready"]:
+            _prepare()
         return illustrate(
-            subjects, out_dir, pipeline=loaded, model=name,
-            width=size[0], height=size[1],
+            subjects, out_dir, pipeline=state["pipeline"], model=name,
+            width=w, height=h, generate=state["generate"],
         )
 
+    def close() -> None:
+        """Free the image model once the draw stage is done, so ~36 GB of RAM and
+        its VRAM are not held through lettering, rendering and metadata. Called by
+        the pipeline after draw; symmetric with the voice model's close()."""
+        if state["release"] is not None:
+            state["release"]()
+        elif state["pipeline"] is not None:
+            try:
+                import gc
+
+                import torch
+
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+        state["pipeline"] = state["generate"] = state["release"] = None
+        state["ready"] = False
+
+    draw.close = close
     return draw
 
 

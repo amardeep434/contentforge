@@ -210,6 +210,63 @@ def test_a_drawing_count_that_disagrees_with_the_spec_raises(tmp_path):
         ensure_frames(tmp_path, specs, [Path("only-one.png")], fakes.upscale)
 
 
+def test_a_failed_stage_is_recorded_durably_with_what_remains(tmp_path):
+    """A crash in one stage must leave status.json showing what worked, what
+    failed and what is still pending - so a resume does not restart from zero."""
+    import json
+
+    fakes = Fakes()
+
+    def boom(subjects, out_dir):
+        raise RuntimeError("simulated OOM in draw")
+
+    fakes.draw = boom
+    with pytest.raises(RuntimeError, match="simulated OOM in draw"):
+        build(tmp_path, fakes)
+
+    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    stages = status["stages"]
+    assert stages["script"] == "ok"
+    assert stages["spec"] == "ok"
+    assert stages["audio"] == "ok"
+    assert stages["draw"] == "failed"
+    # render is downstream of draw and never ran; it must still read as pending.
+    assert stages["render"] == "pending"
+    assert status["failed"] == "draw"
+    assert "render" in status["remaining"]
+    assert "simulated OOM in draw" in status["error"]
+    # the human trail exists too
+    assert "FAILED" in (tmp_path / "run" / "run.log").read_text()
+
+
+def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
+    """Ctrl-C mid-render must record a "stopped" (not "failed") status, with the
+    finished stages kept, so a re-run resumes instead of restarting."""
+    import json
+
+    from contentforge import interrupt
+
+    fakes = Fakes()
+    interrupt.clear()
+    interrupt._stop.set()  # request a stop before the first per-item stage (audio)
+    try:
+        with pytest.raises(interrupt.StopRequested):
+            build(tmp_path, fakes)
+    finally:
+        interrupt.clear()
+
+    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    stages = status["stages"]
+    assert stages["script"] == "ok"
+    assert stages["spec"] == "ok"
+    assert stages["audio"] == "stopped"  # clean stop, not "failed"
+    assert stages["render"] == "pending"
+    assert status["stopped"] == "audio"
+    assert "draw" in status["remaining"]
+    assert "error" not in status  # a stop is not an error
+    assert "STOPPED" in (tmp_path / "run" / "run.log").read_text()
+
+
 def test_an_upscaler_that_writes_nothing_raises(tmp_path):
     fakes = Fakes(headings=False)
     fakes.upscale = lambda source, target: target

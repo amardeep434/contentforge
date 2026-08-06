@@ -320,7 +320,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     make.add_argument("--voice", default=None)
     make.add_argument(
-        "--voice-backend", default=None, choices=["edge", "gemini"],
+        "--voice-backend", default=None,
+        choices=["omnivoice", "edge", "gemini"],
+        help="default omnivoice (local, no key); edge is a low-quality fallback",
     )
     make.add_argument("--model", default=None, help="diffusion model")
     make.add_argument(
@@ -440,19 +442,30 @@ def main(argv: list[str] | None = None) -> int:
         all_stages = {"script", "spec", "audio", "draw", "letter", "render",
                       "metadata", "thumbnail"}
         stages = all_stages if "all" in args.force else set(args.force)
-        video = build_video(
-            run_dir=run_dir,
-            planner=runtime.spec_planner(),
-            speak=runtime.speaker(args.voice_backend, args.voice),
-            illustrator=runtime.illustrator(args.model),
-            upscaler=runtime.upscaler(),
-            renderer=runtime.renderer(),
-            metadata_writer=runtime.metadata_writer(),
-            headline=args.headline,
-            script=script,
-            scriptwriter=writer,
-            force=stages,
-        )
+
+        from contentforge import interrupt
+
+        # Ctrl-C (or SIGTERM) now stops between work items, keeping finished
+        # audio/images/frames on disk; re-running the same command resumes.
+        interrupt.arm()
+        try:
+            video = build_video(
+                run_dir=run_dir,
+                planner=runtime.spec_planner(),
+                speak=runtime.speaker(args.voice_backend, args.voice),
+                illustrator=runtime.illustrator(args.model),
+                upscaler=runtime.upscaler(),
+                renderer=runtime.renderer(),
+                metadata_writer=runtime.metadata_writer(),
+                headline=args.headline,
+                script=script,
+                scriptwriter=writer,
+                force=stages,
+            )
+        except interrupt.StopRequested:
+            print(f"\n  stopped safely. finished work is saved in {run_dir}/")
+            print(f"  resume by re-running: pipeline make {args.slug}")
+            return 130  # conventional exit code for interrupted-by-signal
         print(f"\n  {video}")
         print(f"  review everything in {run_dir}/ before `pipeline publish {args.slug}`")
         return 0

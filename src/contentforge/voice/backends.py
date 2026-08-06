@@ -202,11 +202,17 @@ def synthesise_beats(
     """
     if not beats:
         raise MissingDataError("no beats to narrate")
+    from contentforge import interrupt
+
     out_dir.mkdir(parents=True, exist_ok=True)
     clips: list[Clip] = []
     for index, beat in enumerate(beats, start=1):
+        interrupt.check()  # stop between beats, never mid-synthesis
         path = out_dir / f"beat_{index:03d}.wav"
-        speak(beat, path)
+        # A clip already on disk (from an earlier, interrupted run) is reused, so
+        # a stop does not re-synthesise what was finished.
+        if not (path.exists() and path.stat().st_size > 0):
+            speak(beat, path)
         if not path.exists() or path.stat().st_size == 0:
             raise MissingDataError(
                 f"beat {index} produced no audio; a missing clip would shorten "

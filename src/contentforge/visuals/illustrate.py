@@ -193,12 +193,19 @@ def illustrate(
             image.save(path)
             return path
 
+    from contentforge import interrupt
+
     made: list[Illustration] = []
     for index, subject in enumerate(subjects, start=1):
+        interrupt.check()  # stop between images, never mid-generation
         prompt = build_prompt(subject)
         image_seed = seed + index
         path = out_dir / f"shot_{index:03d}.png"
-        generate(prompt, path, image_seed)
+        # An image already drawn (from an earlier, interrupted run) is kept, so a
+        # stop part way through the draw stage does not redo hours of finished
+        # work - each image is ~4 min on a 6 GB card.
+        if not (path.exists() and path.stat().st_size > 0):
+            generate(prompt, path, image_seed)
         if not path.exists() or path.stat().st_size == 0:
             raise MissingDataError(
                 f"illustration {index} was not written; a missing image would "

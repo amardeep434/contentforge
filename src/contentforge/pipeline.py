@@ -20,6 +20,7 @@ finished video that nobody watches closely enough to catch.
 import json
 import shutil
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -41,11 +42,18 @@ MANIFEST_NAME = "manifest.json"
 VIDEO_NAME = "video.mp4"
 METADATA_NAME = "metadata.json"
 THUMBNAIL_NAME = "thumbnail.png"
+STATUS_NAME = "status.json"
+RUNLOG_NAME = "run.log"
 
 AUDIO_DIR = "audio"
 RAW_DIR = "raw"
 FRAME_DIR = "frames"
 WORK_DIR = "work"
+
+#: Every stage, in order. metadata and thumbnail only run when a metadata writer
+#: is supplied, so the planned set is trimmed for a bare render (see build_video).
+STAGE_ORDER = ["script", "spec", "audio", "draw", "letter", "render",
+               "metadata", "thumbnail"]
 
 
 @dataclass(frozen=True)
@@ -55,6 +63,83 @@ class Stage:
     name: str
     detail: str
     skipped: bool = False
+
+
+class RunLog:
+    """A durable, incremental record of stage status in the run directory.
+
+    Written after *every* stage, not just at the end, so a render that dies
+    partway (an OOM in the draw stage, a missing font in lettering) leaves
+    behind exactly what worked, what failed and what remains. A resume then
+    skips the finished stages by their artefacts, and a human can see at a
+    glance where it stopped and why - without re-reading the whole log.
+
+    ``status.json`` is the machine view (stage -> state, plus the error on
+    failure); ``run.log`` is the human, append-only trail with timestamps.
+    """
+
+    def __init__(self, run_dir: Path, planned: list[str],
+                 log: Callable[[str], None] = print) -> None:
+        self._status_path = run_dir / STATUS_NAME
+        self._log_path = run_dir / RUNLOG_NAME
+        self._log = log
+        self.stages: list[Stage] = []
+        self._planned = list(planned)
+        self.status = {name: "pending" for name in planned}
+        self._flush()
+
+    def _append(self, line: str) -> None:
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self._log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp} {line}\n")
+
+    def start(self, name: str) -> None:
+        self.status[name] = "running"
+        self._append(f"{name}: start")
+        self._flush()
+
+    def done(self, stage: Stage) -> None:
+        self.stages.append(stage)
+        self.status[stage.name] = "skipped" if stage.skipped else "ok"
+        self._append(f"{stage.name}: {self.status[stage.name]} - {stage.detail}")
+        self._flush()
+        suffix = "  (skipped)" if stage.skipped else ""
+        self._log(f"  {stage.name:<8} {stage.detail}{suffix}")
+
+    def failed(self, name: str, exc: BaseException) -> None:
+        self.status[name] = "failed"
+        remaining = [n for n in self._planned if self.status[n] == "pending"]
+        error = f"{type(exc).__name__}: {exc}"
+        self._append(f"{name}: FAILED - {error}")
+        if remaining:
+            self._append(f"remaining: {', '.join(remaining)}")
+        self._flush(error=error, failed=name, remaining=remaining)
+        self._log(f"  {name:<8} FAILED - {error}")
+
+    def stopped(self, name: str) -> None:
+        """A clean, requested stop - not a failure. Whatever finished is on disk
+        and re-running resumes from here (this stage's per-item skip keeps the
+        items it already produced)."""
+        self.status[name] = "stopped"
+        remaining = [n for n in self._planned if self.status[n] == "pending"]
+        self._append(f"{name}: STOPPED (safe) - finished items saved, resumable")
+        if remaining:
+            self._append(f"remaining: {', '.join(remaining)}")
+        self._flush(stopped=name, remaining=remaining)
+        self._log(f"  {name:<8} stopped (safe) - finished items saved, resumable")
+
+    def _flush(self, **extra) -> None:
+        self._status_path.write_text(
+            json.dumps({"stages": self.status, **extra}, indent=2)
+        )
+
+
+def _clear(paths: list[Path]) -> None:
+    """Remove any of these files that exist. Used when a stage is forced, so a
+    redo starts clean and the per-item skip does not keep stale outputs."""
+    for path in paths:
+        if path.exists():
+            path.unlink()
 
 
 def run_dir_for(root: Path, slug: str) -> Path:
@@ -189,6 +274,9 @@ def ensure_audio(run_dir: Path, beats: list[str],
     """One clip per beat. Existing clips are re-measured, not re-synthesised."""
     out_dir = run_dir / AUDIO_DIR
     existing = sorted(out_dir.glob("beat_*.wav")) if out_dir.exists() else []
+    if force:
+        _clear(existing)
+        existing = []
     if len(existing) == len(beats) and not force:
         clips = [
             Clip(path=path, duration_s=timer(path), text=beat)
@@ -220,6 +308,8 @@ def ensure_illustrations(run_dir: Path, specs: list[BeatSpec],
         return wanted, Stage("draw", f"{len(wanted)} images, cached", skipped=True)
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    if force:
+        _clear(wanted)  # a forced redo starts fresh; per-item skip keeps the rest
     illustrator([spec.subject for spec in specs], out_dir)
     missing = [path for path in wanted if not path.exists()]
     if missing:
@@ -247,9 +337,17 @@ def ensure_frames(run_dir: Path, specs: list[BeatSpec], raws: list[Path],
     if all(path.exists() for path in wanted) and not force:
         return wanted, Stage("letter", f"{len(wanted)} frames, cached", skipped=True)
 
+    from contentforge import interrupt
+
     out_dir.mkdir(parents=True, exist_ok=True)
+    if force:
+        _clear(wanted)
     lettered = 0
     for spec, raw, target in zip(specs, raws, wanted):
+        interrupt.check()  # stop between frames, never mid-frame
+        # A finished frame from an earlier, interrupted run is kept.
+        if target.exists() and target.stat().st_size > 0:
+            continue
         upscaler(raw, target)
         if not target.exists():
             raise MissingDataError(f"upscaling produced nothing for {raw}")
@@ -431,40 +529,64 @@ def build_video(
     force = force or set()
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    stages = []
-    text, stage = ensure_script(run_dir, script, scriptwriter, "script" in force)
-    stages.append(stage)
+    planned = list(STAGE_ORDER)
+    if metadata_writer is None:
+        planned = [n for n in planned if n not in ("metadata", "thumbnail")]
+    runlog = RunLog(run_dir, planned, log)
+
+    def stage(name: str, run: Callable):
+        """Run one stage, recording its outcome durably before moving on. A
+        requested stop is recorded as a clean, resumable "stopped"; any other
+        failure is recorded (with what remains) and re-raised - the render stops
+        loudly, but never without leaving a record."""
+        from contentforge import interrupt
+
+        runlog.start(name)
+        try:
+            result, entry = run()
+        except interrupt.StopRequested:
+            runlog.stopped(name)
+            raise
+        except Exception as exc:
+            runlog.failed(name, exc)
+            raise
+        runlog.done(entry)
+        return result
+
+    text = stage("script",
+                 lambda: ensure_script(run_dir, script, scriptwriter, "script" in force))
     beats = beats_for(text)
     log(f"  script   {len(text.split())} words, {len(beats)} beats")
 
-    specs, stage = ensure_spec(run_dir, beats, planner, "spec" in force)
-    stages.append(stage)
-    clips, stage = ensure_audio(run_dir, beats, speak, "audio" in force, timer)
-    stages.append(stage)
+    specs = stage("spec", lambda: ensure_spec(run_dir, beats, planner, "spec" in force))
+    clips = stage("audio",
+                  lambda: ensure_audio(run_dir, beats, speak, "audio" in force, timer))
     # Free any GPU the voice backend holds before image generation loads its own
     # model - on a 6 GB card the two cannot be resident at once.
     if hasattr(speak, "close"):
         speak.close()
-    raws, stage = ensure_illustrations(run_dir, specs, illustrator, "draw" in force)
-    stages.append(stage)
-    frames, stage = ensure_frames(run_dir, specs, raws, upscaler, "letter" in force)
-    stages.append(stage)
-    video, stage = ensure_video(run_dir, clips, frames, renderer, "render" in force)
-    stages.append(stage)
+    raws = stage("draw",
+                 lambda: ensure_illustrations(run_dir, specs, illustrator, "draw" in force))
+    # Free the image model (~36 GB RAM + its VRAM) now the drawing is done - the
+    # remaining stages do not need it, and holding it strains a small container.
+    if hasattr(illustrator, "close"):
+        illustrator.close()
+    frames = stage("letter",
+                   lambda: ensure_frames(run_dir, specs, raws, upscaler, "letter" in force))
+    video = stage("render",
+                  lambda: ensure_video(run_dir, clips, frames, renderer, "render" in force))
 
     if metadata_writer is not None:
         sources = _load_sources_quietly(run_dir)
-        meta, stage = ensure_metadata(run_dir, text, sources, metadata_writer,
-                                      "metadata" in force)
-        stages.append(stage)
-        _, stage = ensure_thumbnail(run_dir, frames,
-                                    headline or meta.thumb_headline or meta.title,
-                                    "thumbnail" in force)
-        stages.append(stage)
+        meta = stage("metadata",
+                     lambda: ensure_metadata(run_dir, text, sources, metadata_writer,
+                                             "metadata" in force))
+        stage("thumbnail",
+              lambda: ensure_thumbnail(run_dir, frames,
+                                       headline or meta.thumb_headline or meta.title,
+                                       "thumbnail" in force))
 
-    for entry in stages:
-        log(f"  {entry.name:<8} {entry.detail}{'  (skipped)' if entry.skipped else ''}")
-    write_manifest(run_dir, beats, specs, clips, video, stages)
+    write_manifest(run_dir, beats, specs, clips, video, runlog.stages)
     return video
 
 

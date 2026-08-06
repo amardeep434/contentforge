@@ -21,6 +21,12 @@ gpu = [
     "transformers>=4.44",
     "accelerate>=0.33",
     "safetensors>=0.4",
+    # The default image model (Qwen-Image) is a 20B GGUF model streamed on a 6 GB
+    # card by mmgp (Memory Management for the GPU Poor); optimum-quanto is its
+    # qint8 backend. Weights are pre-quantised once via scripts/build_prequant.py.
+    # See docs/setup/local-image-generation.md.
+    "mmgp>=3.7",
+    "optimum-quanto>=0.2",
 ]
 # Publishing to YouTube. Kept optional so research and rendering need no Google
 # auth libraries. google-api-python-client is already a core dependency; these
