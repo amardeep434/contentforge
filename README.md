@@ -38,7 +38,7 @@ plan is [Plan 3](docs/superpowers/plans/2026-07-30-art-history-slice.md).
 
 Tests never touch a live API, a GPU or ffmpeg — every backend is injected:
 
-    .venv/bin/pytest            # 536 tests
+    .venv/bin/pytest            # 578 tests
 
 ### Making a video
 
@@ -49,18 +49,25 @@ Tests never touch a live API, a GPU or ffmpeg — every backend is injected:
 
 One command, one run directory, resumable stages:
 
-    script → spec → audio → draw → letter → render
+    script → spec → audio → draw → letter → render → metadata → thumbnail
 
 `script` is either hand-written (`--script-file`), generated from `--topic` +
 `--source` URLs (grounded in them, checked for verbatim lifting), or a cached
-`script.txt`. `render` also emits `subtitles.srt`/`.vtt` from the same shot
-timing. `publish` derives the title, description and tags, builds the thumbnail
-from the first frame, and uploads — private, behind a confirmation.
+`script.txt`. Narration is **OmniVoice**, local and offline, no API key
+([local-voice.md](docs/setup/local-voice.md)). Illustration defaults to
+**Qwen-Image**, a GGUF model streamed on a 6 GB card
+([local-image-generation.md](docs/setup/local-image-generation.md)). `render`
+also emits `subtitles.srt`/`.vtt`. `make` produces **everything reviewable** —
+including `metadata.json` and `thumbnail.png` — so `publish` only uploads what
+was already reviewed, private and behind a confirmation.
 
-Each stage writes a named artefact and is skipped if it is already there, so a
-rerun after a crash resumes rather than restarting. `--force draw` redoes one
-stage. `spec.json` is the visual plan and is meant to be edited by hand — it is
-the cheapest place to fix a video.
+Each stage writes a named artefact and is skipped if it is already there; within
+a stage, finished items (audio clips, images, frames) are kept too. So a rerun
+after a crash — or after a **safe stop** (Ctrl-C finishes the current item, then
+stops cleanly and records where it stopped) — resumes rather than restarting.
+Progress is written live to `status.json` and `run.log` in the run directory.
+`--force draw` redoes one stage. `spec.json` is the visual plan and is meant to
+be edited by hand — it is the cheapest place to fix a video.
 
 The lettering, the drawn sheet it sits on and the palette correction are all
 production stages, not post-processing: measured against a native frame from the
