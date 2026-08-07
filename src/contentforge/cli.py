@@ -435,7 +435,6 @@ def main(argv: list[str] | None = None) -> int:
             beats_for,
             build_video,
             ensure_script,
-            load_or_write_script,
             run_dir_for,
         )
 

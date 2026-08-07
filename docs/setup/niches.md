@@ -22,6 +22,12 @@ An explicit `--model` (or `CONTENTFORGE_IMAGE_MODEL`) still overrides the
 niche's `image_model` for a quick draft pass — it does not change which niche
 you're rendering into.
 
+On a normal `make` run, a niche's `image_model` and voice `reference` take
+precedence over the `CONTENTFORGE_IMAGE_MODEL` / `CONTENTFORGE_VOICE_REFERENCE`
+environment variables — the niche is the source of truth for its own render.
+Use `--model` for a one-off draft override instead of changing the
+environment.
+
 ## Niches are hand-authored
 
 There is no auto-detection. A named niche with a missing or malformed

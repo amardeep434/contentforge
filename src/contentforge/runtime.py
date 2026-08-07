@@ -144,7 +144,7 @@ class _GpuSpeaker:
     for image generation.
     """
 
-    def __init__(self, backend, reference: Path, speed: float = None):
+    def __init__(self, backend, reference: Path, speed: float | None = None):
         self._backend = backend
         self._reference = reference
         self._speed = speed
