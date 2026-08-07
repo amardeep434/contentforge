@@ -163,6 +163,7 @@ def illustrate(
     height: int = 432,
     seed: int = 0,
     generate: Callable | None = None,
+    house_style: str = HOUSE_STYLE,
 ) -> list[Illustration]:
     """One illustration per subject, in order.
 
@@ -198,7 +199,7 @@ def illustrate(
     made: list[Illustration] = []
     for index, subject in enumerate(subjects, start=1):
         interrupt.check()  # stop between images, never mid-generation
-        prompt = build_prompt(subject)
+        prompt = build_prompt(subject, style=house_style)
         image_seed = seed + index
         path = out_dir / f"shot_{index:03d}.png"
         # An image already drawn (from an earlier, interrupted run) is kept, so a

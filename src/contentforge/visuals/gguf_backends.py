@@ -100,7 +100,7 @@ def _resolve_components(components: str) -> str:
 
 
 def load_pipeline_and_generate(
-    name: str, width: int = 768, height: int = 432
+    name: str, width: int = 768, height: int = 432, negative: str = NEGATIVE
 ) -> tuple[object, Callable, Callable]:
     """Load a pre-quantised GGUF model and return (pipeline, generate, release).
 
@@ -161,7 +161,7 @@ def load_pipeline_and_generate(
     def generate(prompt: str, path: Path, image_seed: int) -> Path:
         kwargs = {k: v for k, v in gen.items() if k != "use_negative"}
         if gen["use_negative"]:
-            kwargs["negative_prompt"] = NEGATIVE
+            kwargs["negative_prompt"] = negative
         image = pipe(
             prompt=prompt,
             width=width,

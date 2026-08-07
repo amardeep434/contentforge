@@ -84,7 +84,7 @@ def spec_planner(client=None) -> Callable[[list[str]], list]:
     return lambda beats: generate_spec(resolved, beats)
 
 
-def scriptwriter(topic: str, source_urls: list[str], client=None):
+def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None):
     """A callable that writes one grounded, validated narration into a run.
 
     Returns None when no topic is given, so `make` falls back to a hand-written
@@ -94,6 +94,7 @@ def scriptwriter(topic: str, source_urls: list[str], client=None):
     """
     if not topic:
         return None
+    from contentforge.script import generate
     from contentforge.script.generate import choose_shape, generate_script
     from contentforge.script.validate import validate_script
     from contentforge.sourcing.fetch import fetch_source, save_sources
@@ -108,19 +109,29 @@ def scriptwriter(topic: str, source_urls: list[str], client=None):
     def write(run_dir: Path) -> str:
         sources = [fetch_source(url) for url in source_urls]
         save_sources(sources, run_dir)
-        script = generate_script(resolved, topic, sources, choose_shape(topic))
+        system = niche.script_system if niche else generate.SYSTEM
+        target_words = niche.target_words if niche else (
+            generate.TARGET_WORDS_LOW, generate.TARGET_WORDS_HIGH
+        )
+        script = generate_script(
+            resolved, topic, sources, choose_shape(topic),
+            system=system, target_words=target_words,
+        )
         validate_script(script, sources)   # raises on verbatim, no citation, faked credentials
         return script
 
     return write
 
 
-def metadata_writer(client=None):
+def metadata_writer(niche=None, client=None):
     """A callable that derives YouTube metadata from a script and its sources."""
     from contentforge.publish.metadata import generate_metadata
 
     resolved = client or llm_client()
-    return lambda script, sources=None: generate_metadata(resolved, script, sources)
+    title_format = niche.title_format if niche else None
+    return lambda script, sources=None: generate_metadata(
+        resolved, script, sources, title_format=title_format
+    )
 
 
 class _GpuSpeaker:
@@ -133,9 +144,10 @@ class _GpuSpeaker:
     for image generation.
     """
 
-    def __init__(self, backend, reference: Path):
+    def __init__(self, backend, reference: Path, speed: float = None):
         self._backend = backend
         self._reference = reference
+        self._speed = speed
         self._model = None
 
     def __call__(self, text: str, path: Path) -> Path:
@@ -144,6 +156,7 @@ class _GpuSpeaker:
         return self._backend.synthesise(
             self._model, text, path, self._reference,
             self._backend.DEFAULT_REFERENCE_TEXT,
+            speed=self._speed if self._speed is not None else self._backend.DEFAULT_SPEED,
         )
 
     def close(self) -> None:
@@ -167,7 +180,7 @@ class _GpuSpeaker:
             pass
 
 
-def speaker(backend: str | None = None, voice: str | None = None
+def speaker(niche=None, backend: str | None = None, voice: str | None = None
             ) -> Callable[[str, Path], Path]:
     """Narrate one beat to one file.
 
@@ -180,8 +193,11 @@ def speaker(backend: str | None = None, voice: str | None = None
     if chosen == "omnivoice":
         from contentforge.voice import omnivoice_backend as ov
 
-        reference = Path(os.environ.get(ENV_VOICE_REFERENCE, str(ov.DEFAULT_REFERENCE)))
-        return _GpuSpeaker(ov, reference)
+        reference = (
+            niche.voice_reference if niche else
+            Path(os.environ.get(ENV_VOICE_REFERENCE, str(ov.DEFAULT_REFERENCE)))
+        )
+        return _GpuSpeaker(ov, reference, speed=niche.pace if niche else None)
 
     if chosen == "edge":
         from contentforge.voice.speak import DEFAULT_VOICE, synthesise
@@ -214,7 +230,7 @@ def speaker(backend: str | None = None, voice: str | None = None
     )
 
 
-def illustrator(model: str | None = None, width: int | None = None,
+def illustrator(niche=None, model: str | None = None, width: int | None = None,
                 height: int | None = None) -> Callable[[list[str], Path], list]:
     """Subjects in, one image file per subject out.
 
@@ -223,9 +239,12 @@ def illustrator(model: str | None = None, width: int | None = None,
     half an hour of doing nothing.
     """
     from contentforge.visuals import gguf_backends
-    from contentforge.visuals.illustrate import illustrate, load_pipeline
+    from contentforge.visuals.illustrate import HOUSE_STYLE, NEGATIVE, illustrate, load_pipeline
 
-    name = model or os.environ.get(ENV_IMAGE_MODEL, DEFAULT_IMAGE_MODEL)
+    name = (
+        model or (niche.image_model if niche else None)
+        or os.environ.get(ENV_IMAGE_MODEL, DEFAULT_IMAGE_MODEL)
+    )
     w = width or int(os.environ.get(ENV_IMAGE_WIDTH, 768))
     h = height or int(os.environ.get(ENV_IMAGE_HEIGHT, 432))
     # loaded once on first draw and reused: reloading per beat would add the full
@@ -238,7 +257,9 @@ def illustrator(model: str | None = None, width: int | None = None,
         # failures propagate: a final render must not silently swap models.
         if gguf_backends.is_gguf_model(name):
             _, state["generate"], state["release"] = (
-                gguf_backends.load_pipeline_and_generate(name, w, h)
+                gguf_backends.load_pipeline_and_generate(
+                    name, w, h, negative=niche.negative if niche else NEGATIVE
+                )
             )
         else:
             state["pipeline"] = load_pipeline(name)
@@ -250,6 +271,7 @@ def illustrator(model: str | None = None, width: int | None = None,
         return illustrate(
             subjects, out_dir, pipeline=state["pipeline"], model=name,
             width=w, height=h, generate=state["generate"],
+            house_style=niche.house_style if niche else HOUSE_STYLE,
         )
 
     def close() -> None:
