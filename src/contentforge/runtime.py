@@ -84,7 +84,7 @@ def spec_planner(client=None) -> Callable[[list[str]], list]:
     return lambda beats: generate_spec(resolved, beats)
 
 
-def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None):
+def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None, sources=None):
     """A callable that writes one grounded, validated narration into a run.
 
     Returns None when no topic is given, so `make` falls back to a hand-written
@@ -99,28 +99,38 @@ def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None):
     from contentforge.script.validate import validate_script
     from contentforge.sourcing.fetch import fetch_source, save_sources
 
-    if not source_urls:
+    if not source_urls and not sources:
         raise MissingDataError(
-            f"--topic {topic!r} needs at least one --source URL; a script "
-            "grounded in nothing is what this pipeline refuses to make"
+            f"--topic {topic!r} needs at least one --source URL (or a transcript); "
+            "a script grounded in nothing is what this pipeline refuses to make"
         )
     resolved = client or llm_client()
 
     def write(run_dir: Path) -> str:
-        sources = [fetch_source(url) for url in source_urls]
-        save_sources(sources, run_dir)
+        srcs = sources if sources is not None else [fetch_source(url) for url in source_urls]
+        save_sources(srcs, run_dir)
         system = niche.script_system if niche else generate.SYSTEM
         target_words = niche.target_words if niche else (
             generate.TARGET_WORDS_LOW, generate.TARGET_WORDS_HIGH
         )
         script = generate_script(
-            resolved, topic, sources, choose_shape(topic),
+            resolved, topic, srcs, choose_shape(topic),
             system=system, target_words=target_words,
         )
-        validate_script(script, sources)   # raises on verbatim, no citation, faked credentials
+        validate_script(script, srcs)   # raises on verbatim, no citation, faked credentials
         return script
 
     return write
+
+
+def source_from_transcript(topic: str, text: str):
+    """Wrap a competitor video's transcript as a Source the script rewrites.
+    The video's topic is borrowed; check_verbatim (run in scriptwriter) enforces
+    the script is not a copy of this text."""
+    from datetime import datetime, timezone
+    from contentforge.sourcing.fetch import Source
+    return Source(url=f"transcript:{topic}", title=topic, text=text,
+                  retrieved_at=datetime.now(timezone.utc))
 
 
 def metadata_writer(niche=None, client=None):

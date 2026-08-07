@@ -190,6 +190,27 @@ def _live_transport(api_key: str):
     return _transport
 
 
+def _make_writer(args, run_dir, cfg):
+    """Build the `make` scriptwriter, preferring a transcript over --source URLs.
+
+    Checks --transcript-file, then falls back to an auto-detected harvested
+    transcript staged at meta/sources/reference-transcript.txt (only when
+    --script-file isn't already supplying the script).
+    """
+    from contentforge import runtime
+
+    transcript_path = args.transcript_file
+    if transcript_path is None and not args.script_file:
+        staged = run_dir / "meta" / "sources" / "reference-transcript.txt"
+        if staged.exists():
+            transcript_path = staged
+    if args.topic and transcript_path is not None:
+        source = runtime.source_from_transcript(
+            args.topic, Path(transcript_path).read_text(encoding="utf-8"))
+        return runtime.scriptwriter(args.topic, [], niche=cfg, sources=[source])
+    return runtime.scriptwriter(args.topic, args.source, niche=cfg) if args.topic else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline")
     parser.add_argument(
@@ -312,6 +333,10 @@ def main(argv: list[str] | None = None) -> int:
     make.add_argument(
         "--source", action="append", default=[], metavar="URL",
         help="a primary source to ground the generated script; repeatable",
+    )
+    make.add_argument(
+        "--transcript-file", type=Path, default=None,
+        help="reword this local transcript instead of fetching --source URLs",
     )
     make.add_argument("--root", type=Path, default=Path("data"))
     make.add_argument(
@@ -456,7 +481,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             # A dry run never generates, so it never needs a niche.toml on
             # disk - only the niche-scoped run dir matters here.
-            writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
+            writer = _make_writer(args, run_dir, None)
             text, _ = ensure_script(run_dir, script, writer)
             beats = beats_for(text)
             print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
@@ -467,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
         from contentforge.niche import load_niche
 
         cfg = load_niche(args.niche, args.root)
-        writer = runtime.scriptwriter(args.topic, args.source, niche=cfg) if args.topic else None
+        writer = _make_writer(args, run_dir, cfg)
 
         all_stages = {"script", "spec", "audio", "draw", "letter", "render",
                       "metadata", "thumbnail"}

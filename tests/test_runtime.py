@@ -63,3 +63,29 @@ def test_metadata_writer_with_no_niche_sends_no_custom_system():
     write = runtime.metadata_writer(niche=None, client=client)
     write("a script")
     assert client.seen_system == SYSTEM
+
+
+def test_source_from_transcript_builds_a_source():
+    from contentforge import runtime
+    src = runtime.source_from_transcript("Owning a Laundromat", "THE TRANSCRIPT")
+    assert src.text == "THE TRANSCRIPT"
+    assert src.title == "Owning a Laundromat"
+    assert src.url.startswith("transcript:")
+
+
+def test_scriptwriter_uses_prebuilt_transcript_source(tmp_path, monkeypatch):
+    from contentforge import runtime
+    src = runtime.source_from_transcript("T", "TRANSCRIPT")
+    seen = {}
+
+    def fake_generate_script(client, topic, sources, shape, **kw):
+        seen["sources"] = sources
+        return "SCRIPT"
+
+    monkeypatch.setattr("contentforge.script.generate.generate_script", fake_generate_script)
+    monkeypatch.setattr("contentforge.script.validate.validate_script", lambda s, sources: None)
+    monkeypatch.setattr("contentforge.sourcing.fetch.save_sources", lambda sources, run_dir: None)
+    monkeypatch.setattr(runtime, "llm_client", lambda: object())
+    writer = runtime.scriptwriter("T", [], sources=[src])
+    assert writer(tmp_path) == "SCRIPT"
+    assert seen["sources"][0].text == "TRANSCRIPT"     # the transcript, not a fetched URL
