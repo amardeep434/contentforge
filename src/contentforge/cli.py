@@ -311,7 +311,11 @@ def main(argv: list[str] | None = None) -> int:
         "--source", action="append", default=[], metavar="URL",
         help="a primary source to ground the generated script; repeatable",
     )
-    make.add_argument("--root", type=Path, default=Path("data/videos"))
+    make.add_argument("--root", type=Path, default=Path("data"))
+    make.add_argument(
+        "--niche", default="business-economics",
+        help="niche profile under --root/<niche>/niche.toml",
+    )
     make.add_argument(
         "--force", action="append", default=[],
         choices=["script", "spec", "audio", "draw", "letter", "render",
@@ -343,7 +347,11 @@ def main(argv: list[str] | None = None) -> int:
         help="upload a rendered video to YouTube (private by default)",
     )
     pub.add_argument("slug", help="run name under --root, the video to publish")
-    pub.add_argument("--root", type=Path, default=Path("data/videos"))
+    pub.add_argument("--root", type=Path, default=Path("data"))
+    pub.add_argument(
+        "--niche", default="business-economics",
+        help="niche profile under --root/<niche>/niche.toml",
+    )
     pub.add_argument(
         "--privacy", default="private", choices=["private", "unlisted", "public"],
         help="private (default) appears only in your dashboard until you change it",
@@ -423,21 +431,32 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "make":
         from contentforge import runtime
-        from contentforge.pipeline import beats_for, build_video, load_or_write_script
+        from contentforge.pipeline import (
+            beats_for,
+            build_video,
+            ensure_script,
+            load_or_write_script,
+            run_dir_for,
+        )
 
-        from contentforge.pipeline import ensure_script
-
-        run_dir = args.root / args.slug
+        run_dir = run_dir_for(args.root, args.niche, args.slug)
         script = args.script_file.read_text() if args.script_file else None
-        writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
 
         if args.dry_run:
+            # A dry run never generates, so it never needs a niche.toml on
+            # disk - only the niche-scoped run dir matters here.
+            writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
             text, _ = ensure_script(run_dir, script, writer)
             beats = beats_for(text)
             print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
             for index, beat in enumerate(beats, start=1):
                 print(f"  {index:3d}  {beat[:96]}")
             return 0
+
+        from contentforge.niche import load_niche
+
+        cfg = load_niche(args.niche, args.root)
+        writer = runtime.scriptwriter(args.topic, args.source, niche=cfg) if args.topic else None
 
         all_stages = {"script", "spec", "audio", "draw", "letter", "render",
                       "metadata", "thumbnail"}
@@ -452,22 +471,26 @@ def main(argv: list[str] | None = None) -> int:
             video = build_video(
                 run_dir=run_dir,
                 planner=runtime.spec_planner(),
-                speak=runtime.speaker(args.voice_backend, args.voice),
-                illustrator=runtime.illustrator(args.model),
+                speak=runtime.speaker(niche=cfg, backend=args.voice_backend, voice=args.voice),
+                illustrator=runtime.illustrator(niche=cfg, model=args.model),
                 upscaler=runtime.upscaler(),
                 renderer=runtime.renderer(),
-                metadata_writer=runtime.metadata_writer(),
+                metadata_writer=runtime.metadata_writer(niche=cfg),
                 headline=args.headline,
                 script=script,
                 scriptwriter=writer,
                 force=stages,
+                niche=cfg,
             )
         except interrupt.StopRequested:
             print(f"\n  stopped safely. finished work is saved in {run_dir}/")
-            print(f"  resume by re-running: pipeline make {args.slug}")
+            print(f"  resume by re-running: pipeline make {args.slug} --niche {args.niche}")
             return 130  # conventional exit code for interrupted-by-signal
         print(f"\n  {video}")
-        print(f"  review everything in {run_dir}/ before `pipeline publish {args.slug}`")
+        print(
+            f"  review everything in {run_dir}/ before "
+            f"`pipeline publish {args.slug} --niche {args.niche}`"
+        )
         return 0
 
     if args.command == "publish":
@@ -476,10 +499,11 @@ def main(argv: list[str] | None = None) -> int:
             THUMBNAIL_NAME,
             VIDEO_NAME,
             load_metadata,
+            run_dir_for,
         )
         from contentforge.publish import youtube
 
-        run_dir = args.root / args.slug
+        run_dir = run_dir_for(args.root, args.niche, args.slug)
         video = run_dir / VIDEO_NAME
         thumb = run_dir / THUMBNAIL_NAME
         # Publish only uploads what `make` already produced and you reviewed;
@@ -489,7 +513,8 @@ def main(argv: list[str] | None = None) -> int:
                              (thumb, "thumbnail")):
             if not needed.exists():
                 raise MissingDataError(
-                    f"no {what} at {needed}; run `pipeline make {args.slug}` and "
+                    f"no {what} at {needed}; run "
+                    f"`pipeline make {args.slug} --niche {args.niche}` and "
                     "review the run directory before publishing"
                 )
         meta = load_metadata(run_dir)
