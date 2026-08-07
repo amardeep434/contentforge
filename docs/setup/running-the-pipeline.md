@@ -249,12 +249,14 @@ pipeline make ceiling-fans --topic 'how ceiling fans work' \
 
 The transcript is source material the script **transforms**, never relays —
 `check_verbatim` rejects a script that sits too close to it, with no flag to
-disable that check. If neither `--script-file` nor `--transcript-file` is
-given, `make` auto-uses
+disable that check. With `--topic` set and neither `--script-file` nor
+`--transcript-file` given, `make` auto-uses
 `data/<niche>/videos/<slug>/meta/sources/reference-transcript.txt` when that
-file already exists — which is how a video queued by `pipeline harvest` needs
-no flag at all. See [harvesting.md](harvesting.md) for pulling a whole
-channel's topics and transcripts and rendering them as a batch.
+file already exists (the auto-detect still needs `--topic` — without it the
+staged transcript is ignored). `harvest-make` always passes `--topic` per
+entry, so a video queued by `pipeline harvest` needs no `--transcript-file`
+flag. See [harvesting.md](harvesting.md) for pulling a whole channel's topics
+and transcripts and rendering them as a batch.
 
 To publish the result, see [publishing.md](publishing.md):
 

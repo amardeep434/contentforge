@@ -75,8 +75,9 @@ For each recent upload, `harvest`:
    `data/<niche>/harvest/<channel>/plan.jsonl`.
 
 Slugs are derived from the video title and are unique by construction: a
-title collision gets a deterministic `-2`, `-3` suffix, and a title that's
-empty or non-ASCII falls back to the video id.
+title that slugifies to nothing (e.g. all-punctuation, or fully non-ASCII)
+falls back to the video id, and collisions get a deterministic `-2`, `-3`
+suffix.
 
 `harvest` finishes by printing how many videos it kept and where the plan
 landed, with a hint to review it before rendering:
