@@ -485,8 +485,10 @@ def main(argv: list[str] | None = None) -> int:
         script = args.script_file.read_text() if args.script_file else None
 
         if args.dry_run:
-            # A dry run never generates, so it never needs a niche.toml on
-            # disk - only the niche-scoped run dir matters here.
+            # A dry run needs no niche.toml on disk: it uses default
+            # (non-niche) prompts on the path where it does generate - when
+            # --topic is given with --source or a --transcript-file/staged
+            # transcript (cfg=None here). Only the niche-scoped run dir matters.
             writer = _make_writer(args, run_dir, None)
             text, _ = ensure_script(run_dir, script, writer)
             beats = beats_for(text)
@@ -546,7 +548,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             entries, ledger = build_plan(client, args.channel, ledger, args.limit)
         finally:
-            # On success, persist the quota spent during build_plan. (A
+            # Persist the quota spent during build_plan. (A
             # mid-call failure in build_plan under-records by the calls
             # already billed - the same return-at-end ledger-threading
             # limitation every command here shares.)
