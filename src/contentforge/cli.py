@@ -438,6 +438,12 @@ def main(argv: list[str] | None = None) -> int:
     harvest.add_argument("--root", type=Path, default=Path("data"))
     harvest.add_argument("--profile", default=None)
 
+    hmake = subparsers.add_parser("harvest-make", help="render every video in a harvest plan")
+    hmake.add_argument("channel", help="the channel whose plan.jsonl to run")
+    hmake.add_argument("--niche", default="business-economics")
+    hmake.add_argument("--root", type=Path, default=Path("data"))
+    hmake.add_argument("--model", default=None, help="diffusion model (e.g. flux for a draft batch)")
+
     args = parser.parse_args(argv)
 
     if args.command == "illustrate":
@@ -560,6 +566,44 @@ def main(argv: list[str] | None = None) -> int:
         plan_path = write_plan(kept, args.root / args.niche, args.channel)
         print(f"\n  {len(kept)} videos harvested -> {plan_path}")
         print(f"  review/prune it, then: pipeline harvest-make {args.channel} --niche {args.niche}")
+        return 0
+
+    if args.command == "harvest-make":
+        from contentforge import runtime
+        from contentforge.niche import load_niche
+        from contentforge.harvest.batch import run_batch
+        from contentforge.pipeline import build_video, run_dir_for
+
+        cfg = load_niche(args.niche, args.root)
+        entries = read_plan(args.root / args.niche, args.channel)
+
+        def build_one(entry):
+            run_dir = run_dir_for(args.root, args.niche, entry.slug)
+            staged = run_dir / "meta" / "sources" / "reference-transcript.txt"
+            writer = None
+            if staged.exists():
+                source = runtime.source_from_transcript(
+                    entry.topic, staged.read_text(encoding="utf-8"))
+                writer = runtime.scriptwriter(entry.topic, [], niche=cfg, sources=[source])
+            build_video(
+                run_dir=run_dir,
+                planner=runtime.spec_planner(),
+                speak=runtime.speaker(niche=cfg),
+                illustrator=runtime.illustrator(niche=cfg, model=args.model),
+                upscaler=runtime.upscaler(),
+                renderer=runtime.renderer(),
+                metadata_writer=runtime.metadata_writer(niche=cfg),
+                scriptwriter=writer,
+                force=set(),
+                niche=cfg,
+            )
+
+        # run_batch arms interrupt once for the whole batch; build_video must NOT
+        # re-arm (it does not) so a single Ctrl-C stops the batch gracefully.
+        ledger = run_batch(entries, args.niche, args.root, build_one, channel=args.channel)
+        done = sum(1 for v in ledger.values() if v["status"] == "done")
+        print(f"\n  {done}/{len(ledger)} videos done -> "
+              f"{args.root}/{args.niche}/harvest/{args.channel}/batch.json")
         return 0
 
     if args.command == "publish":

@@ -114,3 +114,39 @@ def test_harvest_writes_plan_and_stages_transcripts(tmp_path, monkeypatch):
     staged = tmp_path / "biz" / "videos" / "owning-a-laundromat" / "meta" / "sources" / "reference-transcript.txt"
     assert staged.read_text() == "TRANSCRIPT ONE"
     assert not (tmp_path / "biz" / "videos" / "owning-a-car-wash").exists()
+
+
+def test_harvest_make_runs_batch_over_plan_entries(tmp_path, monkeypatch):
+    """Fully mocked: no GPU, no LLM. Patches run_batch itself, so this only
+    proves the CLI wires load_niche/read_plan/run_batch/printing together -
+    the batch-loop logic (skip/fail/interrupt) is unit-tested in
+    test_harvest_batch.py, and the build_one niche=cfg wiring is exercised by
+    the harvest-make smoke test (Task 6)."""
+    import contentforge.cli as cli
+    import contentforge.harvest.batch as batch_mod
+    from contentforge.harvest.plan import write_plan, HarvestEntry
+
+    niche_dir = tmp_path / "biz"
+    niche_dir.mkdir(parents=True)
+    (niche_dir / "niche.toml").write_text(
+        '[niche]\nname="biz"\ntitle_format="T {subject}"\n'
+        '[visual]\nhouse_style="hs"\nnegative="neg"\nbg=[1,2,3]\naccent=[4,5,6]\nimage_model="qwen"\n'
+        '[voice]\nreference="~/r.wav"\npace=0.8\nmusic=false\n'
+        '[script]\nsystem="sys"\ntarget_words=[10,20]\n'
+        '[metadata]\nsystem="msys"\n'
+    )
+    entries = [HarvestEntry("s1", "T1", "v1", "http://x/v1", "T1"),
+               HarvestEntry("s2", "T2", "v2", "http://x/v2", "T2")]
+    write_plan(entries, niche_dir, "chan")
+
+    seen = {}
+
+    def fake_run_batch(entries_arg, niche, root, build_one, channel="channel", **kw):
+        seen["slugs"] = [e.slug for e in entries_arg]
+        return {e.slug: {"status": "done"} for e in entries_arg}
+
+    monkeypatch.setattr(batch_mod, "run_batch", fake_run_batch)
+
+    rc = cli.main(["harvest-make", "chan", "--niche", "biz", "--root", str(tmp_path)])
+    assert rc == 0
+    assert seen["slugs"] == ["s1", "s2"]
