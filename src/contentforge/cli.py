@@ -546,8 +546,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             entries, ledger = build_plan(client, args.channel, ledger, args.limit)
         finally:
-            # Persist whatever was spent even if build_plan raised - those
-            # units are gone from the real counter either way.
+            # On success, persist the quota spent during build_plan. (A
+            # mid-call failure in build_plan under-records by the calls
+            # already billed - the same return-at-end ledger-threading
+            # limitation every command here shares.)
             save_ledger(ledger_path, ledger, now, started)
 
         kept = []
