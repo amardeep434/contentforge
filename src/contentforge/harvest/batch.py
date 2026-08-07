@@ -17,7 +17,10 @@ def run_batch(entries, niche, root, build_one, channel="channel", *, arm=interru
     log = log_dir / "harvest-make.log"
 
     def flush():
-        (log_dir / "batch.json").write_text(json.dumps(ledger, indent=2))
+        path = log_dir / "batch.json"
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(ledger, indent=2))
+        tmp.replace(path)
 
     def note(line):
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

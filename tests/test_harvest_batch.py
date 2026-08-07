@@ -25,6 +25,7 @@ def test_batch_skips_done_continues_on_fail_records_ledger(tmp_path):
     assert ledger["s3"]["status"] == "done"
     saved = json.loads((root / "biz" / "harvest" / "chan" / "batch.json").read_text())
     assert saved == ledger
+    assert not (root / "biz" / "harvest" / "chan" / "batch.json.tmp").exists()
 
 def test_batch_stops_on_interrupt(tmp_path):
     def build_one(entry):

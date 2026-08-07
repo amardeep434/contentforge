@@ -580,11 +580,13 @@ def main(argv: list[str] | None = None) -> int:
         def build_one(entry):
             run_dir = run_dir_for(args.root, args.niche, entry.slug)
             staged = run_dir / "meta" / "sources" / "reference-transcript.txt"
-            writer = None
-            if staged.exists():
-                source = runtime.source_from_transcript(
-                    entry.topic, staged.read_text(encoding="utf-8"))
-                writer = runtime.scriptwriter(entry.topic, [], niche=cfg, sources=[source])
+            if not staged.exists():
+                raise MissingDataError(
+                    f"{entry.slug}: no staged transcript at {staged}; "
+                    f"re-run `pipeline harvest {args.channel} --niche {args.niche}`")
+            source = runtime.source_from_transcript(
+                entry.topic, staged.read_text(encoding="utf-8"))
+            writer = runtime.scriptwriter(entry.topic, [], niche=cfg, sources=[source])
             build_video(
                 run_dir=run_dir,
                 planner=runtime.spec_planner(),
