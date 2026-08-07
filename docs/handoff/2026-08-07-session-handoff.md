@@ -280,6 +280,29 @@ plan's SDD workspace, then `superpowers:finishing-a-development-branch` → PR.
    `peft`/`tiktoken`/`gguf`; KEEP mmgp + optimum-quanto + the two qint8 files).
 7. **Then the real payoff:** publish a few videos and MEASURE (the upload-first critique).
 
+## 12. UPDATE (later still): feature A (harvest) landed
+
+All seven tasks of `docs/superpowers/plans/2026-08-06-harvest.md` are
+implemented, committed and documented on `feat/niche-structure`, atop feature
+B (§7 above). `pipeline harvest <channel> --niche <n>` builds a reviewable
+`data/<niche>/harvest/<channel>/plan.jsonl` and stages each video's
+transcript at `data/<niche>/videos/<slug>/meta/sources/reference-transcript.txt`;
+`pipeline harvest-make <channel> --niche <n>` renders the (reviewed) plan as
+a batch, tracked in `data/<niche>/harvest/<channel>/batch.json` (skip-if-done,
+continue-on-failure, Ctrl-C/SIGTERM stops gracefully after the current video,
+resumable). Docs: `docs/setup/harvesting.md` (new), `running-the-pipeline.md`
+(`--transcript-file` + auto-detect), `README.md` (one line), and both hermes
+skills (`~/.hermes/skills/contentforge-video/SKILL.md` §3b,
+`~/.hermes/skills/contentforge-render-status/SKILL.md` §3b).
+
+**Not yet run: the live end-to-end smoke.** Everything above is unit-tested
+with every backend injected (API client, `yt-dlp` runner, scriptwriter,
+render stages) — no test has hit a real YouTube channel, spent real API
+quota, or rendered a real batch on a GPU. That smoke test — a real `@handle`,
+a real `harvest` against live quota, then `harvest-make` on a headless or
+hermes GPU producing an actual `video.mp4` — is the remaining validation step
+before trusting this in production, and is the next thing to run.
+
 ## 11. Do NOT re-litigate (decided/measured this session)
 Qwen = image model for finals, fail-loud, FLUX/sdxl draft-only. Pre-quant qint8 + mmgp streaming is
 the load path; `expandable_segments` stays; the safetensors `backend=` patch stays (after

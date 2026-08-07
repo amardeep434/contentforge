@@ -83,6 +83,10 @@ production stages, not post-processing: measured against a native frame from the
 reference channel, the gap was never resolution (C-060), it was that theirs
 carries a legible document and a flat cream background and ours did not.
 
+A validated competitor channel can be harvested into a batch of videos in your
+own niche's style, transcript-transformed rather than relayed — see
+[docs/setup/harvesting.md](docs/setup/harvesting.md).
+
 Full walkthrough: [docs/setup/running-the-pipeline.md](docs/setup/running-the-pipeline.md).
 Publishing: [docs/setup/publishing.md](docs/setup/publishing.md).
 GPU setup: [docs/setup/local-image-generation.md](docs/setup/local-image-generation.md).

@@ -238,6 +238,24 @@ pipeline make ceiling-fans --topic 'how ceiling fans work' \
 Every factual claim in the generated script must trace to a source; a topic with
 no `--source` is refused rather than invented.
 
+To reword a transcript instead — a competitor's video, or any other
+transcript you already have — use `--transcript-file` with `--topic` in place
+of `--source`:
+
+```bash
+pipeline make ceiling-fans --topic 'how ceiling fans work' \
+    --transcript-file transcript.txt
+```
+
+The transcript is source material the script **transforms**, never relays —
+`check_verbatim` rejects a script that sits too close to it, with no flag to
+disable that check. If neither `--script-file` nor `--transcript-file` is
+given, `make` auto-uses
+`data/<niche>/videos/<slug>/meta/sources/reference-transcript.txt` when that
+file already exists — which is how a video queued by `pipeline harvest` needs
+no flag at all. See [harvesting.md](harvesting.md) for pulling a whole
+channel's topics and transcripts and rendering them as a batch.
+
 To publish the result, see [publishing.md](publishing.md):
 
 ```bash
