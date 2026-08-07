@@ -20,6 +20,8 @@ from contentforge.errors import MissingDataError
 _TAGS = re.compile(r"<(script|style)[^>]*>.*?</\1>|<[^>]+>", re.S | re.I)
 _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
 
+SOURCES_NAME = "meta/sources.json"
+
 
 def http_get(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": "contentforge/0.1"})
@@ -51,8 +53,8 @@ def fetch_source(url: str, transport: Callable[[str], str] = http_get, now=None)
 
 
 def save_sources(sources: list[Source], out_dir: Path) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / "sources.json"
+    path = out_dir / SOURCES_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(
         [{"url": s.url, "title": s.title, "text": s.text,
           "retrieved_at": s.retrieved_at.isoformat()} for s in sources], indent=2))
@@ -60,7 +62,7 @@ def save_sources(sources: list[Source], out_dir: Path) -> Path:
 
 
 def load_sources(directory: Path) -> list[Source]:
-    path = directory / "sources.json"
+    path = directory / SOURCES_NAME
     if not path.exists():
         raise MissingDataError(f"no sources at {path}")
     records = json.loads(path.read_text())

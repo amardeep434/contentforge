@@ -151,9 +151,6 @@ def run_dir_for(root: Path, niche: str, slug: str) -> Path:
 
 # --- script -----------------------------------------------------------------
 
-SOURCES_NAME = "meta/sources.json"
-
-
 def load_or_write_script(run_dir: Path, script: str | None) -> str:
     """The script is the one artefact a human may hand-write."""
     path = run_dir / SCRIPT_NAME
