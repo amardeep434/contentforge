@@ -42,6 +42,13 @@ voice = [
     "omnivoice>=0.2",
     "soundfile>=0.12",
 ]
+# Harvesting a competitor channel's video topics + transcripts. yt-dlp is the
+# binary that pulls a video's auto-captions (see docs/setup, feature A); kept
+# optional so research/rendering need no scraper. Captions come from the yt-dlp
+# binary invoked as a subprocess, not the Python API.
+harvest = [
+    "yt-dlp>=2024.0",
+]
 
 [project.scripts]
 pipeline = "contentforge.cli:main"

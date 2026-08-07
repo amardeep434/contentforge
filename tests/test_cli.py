@@ -150,3 +150,80 @@ def test_harvest_make_runs_batch_over_plan_entries(tmp_path, monkeypatch):
     rc = cli.main(["harvest-make", "chan", "--niche", "biz", "--root", str(tmp_path)])
     assert rc == 0
     assert seen["slugs"] == ["s1", "s2"]
+
+
+def test_harvest_then_harvest_make_end_to_end(tmp_path, monkeypatch):
+    """harvest -> harvest-make, chained on one real tmp_path data root, with
+    every external effect (network, YouTube API, yt-dlp, GPU, LLM) mocked.
+    Proves the two commands actually interoperate on disk: harvest's staged
+    transcripts + plan.jsonl are what harvest-make reads and renders."""
+    from types import SimpleNamespace
+    import contentforge.cli as cli
+    import contentforge.pipeline as pipeline
+    from contentforge import runtime
+    from contentforge.harvest.plan import HarvestEntry
+
+    # ---- Phase A: harvest -----------------------------------------------
+    e1 = HarvestEntry("owning-a-laundromat", "Owning a Laundromat", "v1",
+                       "https://www.youtube.com/watch?v=v1", "Owning a Laundromat")
+    e2 = HarvestEntry("owning-a-car-wash", "Owning a Car Wash", "v2",
+                       "https://www.youtube.com/watch?v=v2", "Owning a Car Wash")
+
+    monkeypatch.setattr(cli, "_credential", lambda profile: ("key", tmp_path / "ledger.json"))
+    monkeypatch.setattr(cli, "_live_transport", lambda api_key: (lambda endpoint, params: {}))
+    monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
+    monkeypatch.setattr(cli, "load_ledger", lambda path, now: SimpleNamespace(spent=0))
+    monkeypatch.setattr(cli, "save_ledger", lambda path, ledger, now, started: None)
+    monkeypatch.setattr(cli, "build_plan", lambda client, channel, ledger, limit: ([e1, e2], ledger))
+
+    def fake_fetch(url):
+        if url.endswith("v1"):
+            return "TRANSCRIPT ONE"
+        return "TRANSCRIPT TWO"
+    monkeypatch.setattr(cli, "fetch_transcript", fake_fetch)
+
+    rc = cli.main(["harvest", "chan", "--niche", "biz", "--root", str(tmp_path)])
+    assert rc == 0
+
+    plan_path = tmp_path / "biz" / "harvest" / "chan" / "plan.jsonl"
+    assert plan_path.exists()
+    for slug in ("owning-a-laundromat", "owning-a-car-wash"):
+        staged = (tmp_path / "biz" / "videos" / slug / "meta" / "sources"
+                  / "reference-transcript.txt")
+        assert staged.exists()
+
+    # ---- Phase B: harvest-make, same root, reads what harvest wrote -----
+    niche_dir = tmp_path / "biz"
+    niche_dir.mkdir(exist_ok=True)
+    (niche_dir / "niche.toml").write_text(
+        '[niche]\nname="biz"\ntitle_format="T {subject}"\n'
+        '[visual]\nhouse_style="hs"\nnegative="neg"\nbg=[1,2,3]\naccent=[4,5,6]\nimage_model="qwen"\n'
+        '[voice]\nreference="~/r.wav"\npace=0.8\nmusic=false\n'
+        '[script]\nsystem="sys"\ntarget_words=[10,20]\n'
+        '[metadata]\nsystem="msys"\n'
+    )
+
+    def fake_build_video(*, run_dir, **kwargs):
+        final = run_dir / "final"
+        final.mkdir(parents=True, exist_ok=True)
+        video = final / "video.mp4"
+        video.write_bytes(b"fake")
+        return video
+
+    monkeypatch.setattr(pipeline, "build_video", fake_build_video)
+    for name in ("spec_planner", "speaker", "illustrator", "upscaler",
+                 "renderer", "metadata_writer"):
+        monkeypatch.setattr(runtime, name, lambda *a, **k: object())
+
+    rc = cli.main(["harvest-make", "chan", "--niche", "biz", "--root", str(tmp_path)])
+    assert rc == 0
+
+    for slug in ("owning-a-laundromat", "owning-a-car-wash"):
+        assert (tmp_path / "biz" / "videos" / slug / "final" / "video.mp4").exists()
+
+    import json
+    batch = json.loads(
+        (tmp_path / "biz" / "harvest" / "chan" / "batch.json").read_text()
+    )
+    assert batch["owning-a-laundromat"]["status"] == "done"
+    assert batch["owning-a-car-wash"]["status"] == "done"
