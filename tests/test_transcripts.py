@@ -71,6 +71,18 @@ def test_fetch_transcript_extracts_id_from_full_url_with_playlist():
     with pytest.raises(MissingDataError, match="abc123"):
         fetch_transcript("https://www.youtube.com/watch?v=abc123&list=PLxxx", runner=run)
 
+def test_fetch_transcript_youtu_be_short_url_drops_query_param():
+    # youtu.be/<id>?t=30 must resolve to "abc123", not "30" - the query string
+    # (?t=) is not the id and must never leak into it.
+    def run(cmd, **kwargs):                              # writes no file
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return R()
+    with pytest.raises(MissingDataError, match="abc123"):
+        fetch_transcript("https://youtu.be/abc123?t=30", runner=run)
+
 def test_fetch_transcript_uses_no_playlist_flag():
     seen = {}
     def run(cmd, **kwargs):
