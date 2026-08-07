@@ -493,3 +493,17 @@ def test_build_writes_into_work_meta_final(tmp_path):
     assert (run / "work" / "raw").is_dir()
     assert (run / "final" / "video.mp4").exists()
     assert (run / "final" / "subtitles.srt").exists()
+
+
+def test_normalise_accepts_a_background(tmp_path):
+    from PIL import Image
+    from contentforge.visuals import palette
+    p = tmp_path / "x.png"
+    Image.new("RGB", (8, 8), (10, 10, 10)).save(p)
+    palette.normalise(p, background=(1, 2, 3))   # must not raise; uses given bg
+
+
+def test_chapter_label_accepts_a_colour():
+    from contentforge.visuals import caption
+    block = caption.chapter_label((1920, 1080), 2, colour=(4, 5, 6))
+    assert block is not None

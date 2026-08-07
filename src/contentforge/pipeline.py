@@ -322,7 +322,8 @@ def ensure_illustrations(run_dir: Path, specs: list[BeatSpec],
 
 def ensure_frames(run_dir: Path, specs: list[BeatSpec], raws: list[Path],
                   upscaler: Callable[[Path, Path], Path],
-                  force: bool = False) -> tuple[list[Path], Stage]:
+                  force: bool = False, background=None, accent=None
+                  ) -> tuple[list[Path], Stage]:
     """Upscale to 1080p, then composite the lettering on top.
 
     Order matters. Upscaling after lettering would soften the text - the whole
@@ -351,15 +352,15 @@ def ensure_frames(run_dir: Path, specs: list[BeatSpec], raws: list[Path],
         upscaler(raw, target)
         if not target.exists():
             raise MissingDataError(f"upscaling produced nothing for {raw}")
-        palette.normalise(target)
+        palette.normalise(target, background=background or palette.REFERENCE_BACKGROUND)
         if not spec.has_lettering and not spec.chapter:
             continue
-        letter_frame(target, spec)
+        letter_frame(target, spec, accent=accent)
         lettered += 1
     return wanted, Stage("letter", f"{len(wanted)} frames, {lettered} lettered")
 
 
-def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
+def letter_frame(frame_path: Path, spec: BeatSpec, accent=None) -> Path:
     """Letter a frame in the reference's dominant style, or a document when asked.
 
     Most beats are one hand-lettered word near the top of an empty background -
@@ -378,7 +379,10 @@ def letter_frame(frame_path: Path, spec: BeatSpec) -> Path:
     with Image.open(frame_path) as image:
         frame_size = image.size
 
-        marker = [caption.chapter_label(frame_size, spec.chapter)] if spec.chapter else []
+        marker = (
+            [caption.chapter_label(frame_size, spec.chapter, colour=accent or caption.ACCENT)]
+            if spec.chapter else []
+        )
 
         if not spec.checklist:
             # Place the heading in whatever the frame leaves empty - a side, a
@@ -519,6 +523,7 @@ def build_video(
     force: set[str] | None = None,
     log: Callable[[str], None] = print,
     timer: Callable[[Path], float] = measure_duration,
+    niche=None,
 ) -> Path:
     """Every stage, in order, resuming whatever is already on disk.
 
@@ -576,7 +581,9 @@ def build_video(
     if hasattr(illustrator, "close"):
         illustrator.close()
     frames = stage("letter",
-                   lambda: ensure_frames(run_dir, specs, raws, upscaler, "letter" in force))
+                   lambda: ensure_frames(run_dir, specs, raws, upscaler, "letter" in force,
+                                         background=niche.bg if niche else None,
+                                         accent=niche.accent if niche else None))
     video = stage("render",
                   lambda: ensure_video(run_dir, clips, frames, renderer, "render" in force))
 
