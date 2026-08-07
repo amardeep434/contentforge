@@ -17,3 +17,38 @@ def test_make_uses_niche_run_dir_and_loads_config(tmp_path):
     assert rc == 0
     # dry-run wrote the script into the niche-scoped run dir
     assert (tmp_path / "biz" / "videos" / "smoke" / "meta" / "script.txt").exists()
+
+
+def test_harvest_writes_plan_and_stages_transcripts(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import contentforge.cli as cli
+    from contentforge.harvest.plan import HarvestEntry
+    from contentforge.errors import MissingDataError
+
+    e1 = HarvestEntry("owning-a-laundromat", "Owning a Laundromat", "v1",
+                      "https://www.youtube.com/watch?v=v1", "Owning a Laundromat")
+    e2 = HarvestEntry("owning-a-car-wash", "Owning a Car Wash", "v2",
+                      "https://www.youtube.com/watch?v=v2", "Owning a Car Wash")
+
+    # Stub the YouTube/quota plumbing so nothing hits the network.
+    monkeypatch.setattr(cli, "_credential", lambda profile: ("key", tmp_path / "ledger.json"))
+    monkeypatch.setattr(cli, "_live_transport", lambda api_key: (lambda endpoint, params: {}))
+    monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
+    monkeypatch.setattr(cli, "load_ledger", lambda path, now: SimpleNamespace(spent=0))
+    monkeypatch.setattr(cli, "save_ledger", lambda path, ledger, now, started: None)
+    monkeypatch.setattr(cli, "build_plan", lambda client, channel, ledger, limit: ([e1, e2], ledger))
+
+    def fake_fetch(url):
+        if url.endswith("v1"):
+            return "TRANSCRIPT ONE"
+        raise MissingDataError("no captions for v2")
+    monkeypatch.setattr(cli, "fetch_transcript", fake_fetch)
+
+    rc = cli.main(["harvest", "somechannel", "--niche", "biz", "--root", str(tmp_path)])
+    assert rc == 0
+
+    plan = (tmp_path / "biz" / "harvest" / "somechannel" / "plan.jsonl").read_text().splitlines()
+    assert len(plan) == 1 and "owning-a-laundromat" in plan[0]          # v2 dropped (no captions)
+    staged = tmp_path / "biz" / "videos" / "owning-a-laundromat" / "meta" / "sources" / "reference-transcript.txt"
+    assert staged.read_text() == "TRANSCRIPT ONE"
+    assert not (tmp_path / "biz" / "videos" / "owning-a-car-wash").exists()

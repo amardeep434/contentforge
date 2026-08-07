@@ -20,6 +20,8 @@ from contentforge.errors import (
     MissingDataError,
     ResourceNotFoundError,
 )
+from contentforge.harvest.plan import build_plan, read_plan, write_plan
+from contentforge.harvest.transcripts import fetch_transcript
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.quota_monitor import (
     DEFAULT_QUOTA_ID,
@@ -401,6 +403,16 @@ def main(argv: list[str] | None = None) -> int:
         "--rpm", type=float, default=None,
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
+
+    harvest = subparsers.add_parser(
+        "harvest", help="channel -> plan.jsonl + staged transcripts"
+    )
+    harvest.add_argument("channel", help="@handle or UC… channel id")
+    harvest.add_argument("--niche", default="business-economics")
+    harvest.add_argument("--limit", type=int, default=20)
+    harvest.add_argument("--root", type=Path, default=Path("data"))
+    harvest.add_argument("--profile", default=None)
+
     args = parser.parse_args(argv)
 
     if args.command == "illustrate":
@@ -490,6 +502,39 @@ def main(argv: list[str] | None = None) -> int:
             f"  review everything in {run_dir}/ before "
             f"`pipeline publish {args.slug} --niche {args.niche}`"
         )
+        return 0
+
+    if args.command == "harvest":
+        from contentforge.pipeline import run_dir_for
+
+        api_key, ledger_path = _credential(args.profile)
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        client = YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
+        try:
+            entries, ledger = build_plan(client, args.channel, ledger, args.limit)
+        finally:
+            # Persist whatever was spent even if build_plan raised - those
+            # units are gone from the real counter either way.
+            save_ledger(ledger_path, ledger, now, started)
+
+        kept = []
+        for entry in entries:
+            try:
+                transcript = fetch_transcript(entry.url)
+            except MissingDataError as exc:
+                print(f"  skip {entry.slug}: {exc}")
+                continue
+            sources = run_dir_for(args.root, args.niche, entry.slug) / "meta" / "sources"
+            sources.mkdir(parents=True, exist_ok=True)
+            (sources / "reference-transcript.txt").write_text(transcript, encoding="utf-8")
+            kept.append(entry)
+            print(f"  {entry.slug}  {entry.topic}")
+
+        plan_path = write_plan(kept, args.root / args.niche, args.channel)
+        print(f"\n  {len(kept)} videos harvested -> {plan_path}")
+        print(f"  review/prune it, then: pipeline harvest-make {args.channel} --niche {args.niche}")
         return 0
 
     if args.command == "publish":
