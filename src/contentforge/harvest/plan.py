@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 from contentforge.errors import MissingDataError
 
 _NONWORD = re.compile(r"[^a-z0-9]+")
+_log = logging.getLogger(__name__)
 
 
 def slugify(title: str) -> str:
@@ -39,6 +41,9 @@ def build_plan(client, channel: str, ledger, limit: int):
         facts, ledger = client.channel_by_handle(channel.lstrip("@"), ledger)
         channel_id = facts.channel_id
 
+    if limit > 50:
+        _log.warning("harvest limit %d capped at 50 (single page)", limit)
+
     uploads, ledger = client.get_uploads_playlists([channel_id], ledger)
     playlist_id = uploads[channel_id]
     video_ids, ledger = client.get_playlist_video_ids(playlist_id, ledger, max_videos=limit)
@@ -46,16 +51,28 @@ def build_plan(client, channel: str, ledger, limit: int):
         raise MissingDataError(f"no videos found for channel {channel!r}")
     records, ledger = client.get_videos(video_ids, ledger)
 
-    entries = [
-        HarvestEntry(
-            slug=slugify(r.title),
-            topic=r.title,
-            video_id=r.video_id,
-            url=f"https://www.youtube.com/watch?v={r.video_id}",
-            title=r.title,
+    seen: dict[str, int] = {}
+    entries = []
+    for r in records:
+        base = slugify(r.title) or r.video_id          # empty/non-ASCII title fallback
+        n = seen.get(base, 0) + 1
+        seen[base] = n
+        slug = base if n == 1 else f"{base}-{n}"        # -2, -3, ...
+        entries.append(
+            HarvestEntry(
+                slug=slug,
+                topic=r.title,
+                video_id=r.video_id,
+                url=f"https://www.youtube.com/watch?v={r.video_id}",
+                title=r.title,
+            )
         )
-        for r in records
-    ]
+
+    if not entries:
+        raise MissingDataError(
+            f"no usable videos for channel {channel!r} "
+            f"({len(video_ids)} found, all dropped for missing duration)"
+        )
     return entries, ledger
 
 
@@ -64,7 +81,14 @@ def _plan_path(niche_root: Path, channel: str) -> Path:
 
 
 def write_plan(entries: list[HarvestEntry], niche_root: Path, channel: str) -> Path:
+    """Write entries as plan.jsonl, overwriting any existing plan.
+
+    A re-harvest is meant to be idempotent, so the overwrite is intentional —
+    but it can clobber a reviewed/hand-edited plan, so we log it.
+    """
     path = _plan_path(niche_root, channel)
+    if path.exists():
+        _log.warning("overwriting existing plan %s", path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
         for e in entries:
@@ -77,7 +101,11 @@ def read_plan(niche_root: Path, channel: str) -> list[HarvestEntry]:
     if not path.exists():
         raise MissingDataError(f"no harvest plan at {path}; run `pipeline harvest` first")
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
             out.append(HarvestEntry(**json.loads(line)))
+        except (TypeError, ValueError) as exc:
+            raise MissingDataError(f"malformed plan row {i} in {path}: {exc}") from exc
     return out
