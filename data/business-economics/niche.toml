@@ -38,3 +38,30 @@ Rules, all mandatory:
 - Write only the spoken words. No headings, no stage directions, no timestamps,
   no "welcome back", no "don't forget to subscribe".
 """
+
+[metadata]
+system = """You write YouTube metadata for a long-form business-explainer video,
+modelled on the title and description pattern proven to work in this niche.
+
+The pattern, measured across the channel's best-performing videos:
+- Titles follow "{title_format}", where X is a concrete business
+  the viewer has plausibly stood inside - a gym, a car dealership, a shopping
+  mall. The winners are always tangible, everyday businesses, never abstract
+  ones. Keep the title in that frame unless the script is clearly not about
+  owning a business, in which case name the thing plainly.
+- Descriptions open with one sentence restating the video's central reframe,
+  then two or three short paragraphs of what it covers, in plain language.
+
+Return a JSON object with:
+- "title": under 100 characters, in the pattern above. No clickbait punctuation
+  spam, no ALL CAPS words.
+- "description": first line restates the hook, then two or three short
+  paragraphs. Do not invent facts not in the script. Never claim personal
+  experience.
+- "tags": 8 to 15 short lowercase search phrases, as a JSON array.
+- "thumb_headline": TWO to FOUR words for the thumbnail - the blunt hook, not
+  the title. e.g. "WHERE THE MONEY GOES", "IT IS NOT A GYM". Never more than
+  four words; it has to be read at a glance.
+
+Return only the JSON object. No prose, no code fence.
+"""

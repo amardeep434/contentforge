@@ -150,6 +150,22 @@ def test_the_manifest_records_what_the_video_is_made_of(tmp_path):
     assert manifest["duration_s"] == 12.0
     assert manifest["shots"][0]["subject"] == "subject 1"
     assert manifest["shots"][0]["text"].startswith("A ceiling fan")
+    assert manifest["music"] is None   # no niche given
+
+
+def test_the_manifest_records_the_niches_music_flag(tmp_path):
+    from contentforge.niche import NicheConfig
+
+    niche = NicheConfig(
+        name="n", title_format="T {subject}", house_style="HS", negative="NEG",
+        bg=(1, 2, 3), accent=(4, 5, 6), image_model="flux",
+        voice_reference=Path("/ref.wav"), pace=0.7, music=True,
+        script_system="SYS", metadata_system="MSYS", target_words=(100, 200),
+    )
+    fakes = Fakes(headings=False)
+    build(tmp_path, fakes, niche=niche)
+    manifest = json.loads((tmp_path / "run" / MANIFEST_NAME).read_text())
+    assert manifest["music"] is True
 
 
 # --- resuming ---------------------------------------------------------------
@@ -495,15 +511,23 @@ def test_build_writes_into_work_meta_final(tmp_path):
     assert (run / "final" / "subtitles.srt").exists()
 
 
-def test_normalise_accepts_a_background(tmp_path):
+def test_normalise_writes_the_given_background(tmp_path):
     from PIL import Image
     from contentforge.visuals import palette
-    p = tmp_path / "x.png"
-    Image.new("RGB", (8, 8), (10, 10, 10)).save(p)
-    palette.normalise(p, background=(1, 2, 3))   # must not raise; uses given bg
+    src = tmp_path / "x.png"
+    dst = tmp_path / "y.png"
+    # A solid fill at the reference background colour flattens to itself (no
+    # texture, no chroma to stretch), so the final background-snap is the only
+    # thing left that can move a pixel - which is exactly what `background`
+    # controls.
+    Image.new("RGB", (32, 32), palette.REFERENCE_BACKGROUND).save(src)
+    palette.normalise(src, dst, background=(1, 2, 3))
+    pixels = list(Image.open(dst).convert("RGB").getdata())
+    assert pixels[0] == (1, 2, 3)
+    assert pixels.count((1, 2, 3)) == len(pixels)
 
 
 def test_chapter_label_accepts_a_colour():
     from contentforge.visuals import caption
     block = caption.chapter_label((1920, 1080), 2, colour=(4, 5, 6))
-    assert block is not None
+    assert block.colour == (4, 5, 6)

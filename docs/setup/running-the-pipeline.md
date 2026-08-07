@@ -274,7 +274,7 @@ data/business-economics/videos/ceiling-fans/
     subtitles.vtt
     metadata.json   title, description, tags — review before publishing
     thumbnail.png   1280x720, built from a finished frame
-  published.json  written after a successful upload (at the run root, not final/)
+    published.json  written under final/ after a successful upload
 ```
 
 `status.json` records each stage as `pending`, `running`, `ok`, `skipped`,

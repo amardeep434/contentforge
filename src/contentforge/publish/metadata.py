@@ -160,12 +160,11 @@ def with_sources(description: str, sources: list) -> str:
 
 
 def generate_metadata(client: LLMClient, script: str, sources: list | None = None,
-                      title_format: str | None = None) -> Metadata:
+                      system: str | None = None) -> Metadata:
     """Metadata from the script, grounded and clamped to YouTube's limits."""
     if not script.strip():
         raise MissingDataError("no script to derive metadata from")
     user = f"Script:\n\n{script.strip()[:6000]}"
-    system = SYSTEM if title_format is None else SYSTEM.replace(
-        "The Economics of Owning a [X]", title_format.replace("{subject}", "[X]")
+    return parse_metadata(
+        client.complete(system or SYSTEM, user, max_tokens=1200), sources
     )
-    return parse_metadata(client.complete(system, user, max_tokens=1200), sources)

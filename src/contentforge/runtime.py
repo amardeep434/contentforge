@@ -128,9 +128,9 @@ def metadata_writer(niche=None, client=None):
     from contentforge.publish.metadata import generate_metadata
 
     resolved = client or llm_client()
-    title_format = niche.title_format if niche else None
+    system = niche.metadata_system.replace("{title_format}", niche.title_format) if niche else None
     return lambda script, sources=None: generate_metadata(
-        resolved, script, sources, title_format=title_format
+        resolved, script, sources, system=system
     )
 
 

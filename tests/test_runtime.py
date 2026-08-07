@@ -7,7 +7,8 @@ def _cfg(**over):
     base = dict(name="n", title_format="T {subject}", house_style="HS", negative="NEG",
                 bg=(1, 2, 3), accent=(4, 5, 6), image_model="flux",
                 voice_reference=Path("/ref.wav"), pace=0.7, music=False,
-                script_system="SYS", target_words=(100, 200))
+                script_system="SYS", metadata_system="MSYS {title_format}",
+                target_words=(100, 200))
     base.update(over)
     return NicheConfig(**base)
 
@@ -35,3 +36,30 @@ def test_speaker_uses_niche_reference_and_pace(monkeypatch):
     spk = runtime.speaker(niche=cfg)
     assert spk._reference == Path("/my/ref.wav")
     assert spk._speed == 0.9
+
+
+class _FakeLLM:
+    def __init__(self):
+        self.seen_system = None
+
+    def complete(self, system, user, max_tokens=0):
+        self.seen_system = system
+        return '{"title": "x", "description": "y", "tags": ["a"]}'
+
+
+def test_metadata_writer_fills_the_niches_title_format_into_its_prompt():
+    from contentforge import runtime
+    cfg = _cfg(title_format="T {subject}", metadata_system="Titles look like {title_format}.")
+    client = _FakeLLM()
+    write = runtime.metadata_writer(niche=cfg, client=client)
+    write("a script")
+    assert client.seen_system == "Titles look like T {subject}."
+
+
+def test_metadata_writer_with_no_niche_sends_no_custom_system():
+    from contentforge import runtime
+    from contentforge.publish.metadata import SYSTEM
+    client = _FakeLLM()
+    write = runtime.metadata_writer(niche=None, client=client)
+    write("a script")
+    assert client.seen_system == SYSTEM

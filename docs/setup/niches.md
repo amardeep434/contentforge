@@ -80,7 +80,7 @@ exactly what is missing.
 |---|---|---|
 | `reference` | path (string, `~` allowed) | Path to the voice reference wav, e.g. `"~/.local/share/contentforge/voices/iapetus-reference.wav"`. |
 | `pace` | float | Narration speaking rate, e.g. `0.80`. |
-| `music` | bool | Whether this niche's renders include background music. |
+| `music` | bool | Whether this niche wants background music. Recorded in `meta/manifest.json` as provenance of intent — a background-music mix stage is not yet implemented, so today the flag only records intent and does not change the render. All shipped niches set `music = false`. |
 
 ### `[script]`
 
@@ -88,6 +88,16 @@ exactly what is missing.
 |---|---|---|
 | `target_words` | `[low, high]` (two ints) | Target script length in words, e.g. `[2500, 3200]`. |
 | `system` | string (usually a triple-quoted multi-line string) | The full narration system prompt — voice, rules, tone — sent to the LLM when generating the script. |
+
+### `[metadata]`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `system` | string (usually a triple-quoted multi-line string) | The full system prompt sent to the LLM when generating YouTube title/description/tags. May contain the literal placeholder `{title_format}`, which `metadata_writer` fills in from `[niche].title_format` before calling the LLM, so the metadata prompt's title guidance always matches the niche's actual title pattern. |
+
+Every field above is validated by *type*, not just presence: a string where a
+number or boolean is expected (e.g. `music = "false"`) fails loudly with
+`MissingDataError` naming the field, rather than being silently coerced.
 
 ## Example: `data/business-economics/niche.toml`
 
@@ -113,6 +123,11 @@ target_words = [2500, 3200]
 system = """You write long-form business-explainer narration, spoken by one
 confident, faintly amused narrator talking directly to the viewer as "you".
 ...
+"""
+
+[metadata]
+system = """You write YouTube metadata for a long-form business-explainer video...
+Titles follow "{title_format}", where X is a concrete business...
 """
 ```
 

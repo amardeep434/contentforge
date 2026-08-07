@@ -597,7 +597,8 @@ def build_video(
                                        headline or meta.thumb_headline or meta.title,
                                        "thumbnail" in force))
 
-    write_manifest(run_dir, beats, specs, clips, video, runlog.stages)
+    write_manifest(run_dir, beats, specs, clips, video, runlog.stages,
+                   music=niche.music if niche else None)
     return video
 
 
@@ -613,11 +614,14 @@ def _load_sources_quietly(run_dir: Path) -> list:
 
 
 def write_manifest(run_dir: Path, beats: list[str], specs: list[BeatSpec],
-                   clips: list[Clip], video: Path, stages: list[Stage]) -> Path:
+                   clips: list[Clip], video: Path, stages: list[Stage],
+                   music: bool | None = None) -> Path:
     """What this video is made of, beside the video.
 
     A rendered mp4 with no record of the beats, prompts and seeds behind it
-    cannot be corrected - only regenerated and hoped over.
+    cannot be corrected - only regenerated and hoped over. `music` is recorded
+    as provenance of the niche's intent, not proof anything was mixed - there is
+    no audio-bed stage yet (see docs/setup/niches.md).
     """
     path = run_dir / MANIFEST_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -625,6 +629,7 @@ def write_manifest(run_dir: Path, beats: list[str], specs: list[BeatSpec],
         "video": str(video),
         "duration_s": round(sum(clip.duration_s for clip in clips), 2),
         "beats": len(beats),
+        "music": music,
         "stages": [{"name": s.name, "detail": s.detail, "skipped": s.skipped}
                    for s in stages],
         "shots": [

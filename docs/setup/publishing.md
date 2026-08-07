@@ -97,15 +97,15 @@ in Studio once reviewed — an upload cannot be un-published, only deleted.
 
 ## 5. What it records
 
-After a successful upload the run directory gets a `published.json`:
+After a successful upload the run directory gets `final/published.json`:
 
 ```json
 { "video_id": "…", "url": "https://www.youtube.com/watch?v=…", "privacy": "private" }
 ```
 
 That is a record, not a lock. Running `publish` again uploads a **second copy** —
-YouTube has no idea it is the same video. Check for `published.json` before
-re-publishing.
+YouTube has no idea it is the same video. Check for `final/published.json`
+before re-publishing.
 
 ---
 

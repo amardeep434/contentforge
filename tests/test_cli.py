@@ -8,6 +8,7 @@ def test_make_uses_niche_run_dir_and_loads_config(tmp_path):
         '[visual]\nhouse_style="hs"\nnegative="neg"\nbg=[1,2,3]\naccent=[4,5,6]\nimage_model="qwen"\n'
         '[voice]\nreference="~/r.wav"\npace=0.8\nmusic=false\n'
         '[script]\nsystem="sys"\ntarget_words=[10,20]\n'
+        '[metadata]\nsystem="msys"\n'
     )
     script = tmp_path / "s.txt"
     script.write_text("One sentence here. Two sentence here. Three here.\n")

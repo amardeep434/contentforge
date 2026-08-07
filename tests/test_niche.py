@@ -22,6 +22,8 @@ music = false
 [script]
 system = "You write narration."
 target_words = [2500, 3200]
+[metadata]
+system = "You write metadata for {title_format}."
 """
 
 def _write(tmp_path: Path, name: str, text: str) -> Path:
@@ -42,6 +44,7 @@ def test_loads_a_full_profile(tmp_path):
     assert cfg.target_words == (2500, 3200)
     assert cfg.voice_reference == Path("~/ref.wav").expanduser()
     assert cfg.script_system == "You write narration."
+    assert cfg.metadata_system == "You write metadata for {title_format}."
 
 def test_missing_file_raises_with_path(tmp_path):
     with pytest.raises(MissingDataError, match="niche.toml"):
@@ -55,4 +58,33 @@ def test_malformed_missing_key_raises_naming_the_field(tmp_path):
 def test_bad_colour_raises(tmp_path):
     bad = GOOD.replace("bg = [240, 232, 216]", "bg = [240, 232]")
     with pytest.raises(MissingDataError, match="bg"):
+        load_niche("demo", _write(tmp_path, "demo", bad))
+
+def test_missing_metadata_section_raises(tmp_path):
+    bad = GOOD.replace(
+        '[metadata]\nsystem = "You write metadata for {title_format}."', ""
+    )
+    with pytest.raises(MissingDataError, match="metadata"):
+        load_niche("demo", _write(tmp_path, "demo", bad))
+
+# --- Fix 1: types are validated, not silently coerced ----------------------
+
+def test_music_as_a_string_raises_instead_of_coercing(tmp_path):
+    bad = GOOD.replace("music = false", 'music = "false"')
+    with pytest.raises(MissingDataError, match=r"\[voice\]\.music"):
+        load_niche("demo", _write(tmp_path, "demo", bad))
+
+def test_pace_as_a_string_raises(tmp_path):
+    bad = GOOD.replace("pace = 0.80", 'pace = "fast"')
+    with pytest.raises(MissingDataError, match=r"\[voice\]\.pace"):
+        load_niche("demo", _write(tmp_path, "demo", bad))
+
+def test_a_non_integer_target_word_raises(tmp_path):
+    bad = GOOD.replace("target_words = [2500, 3200]", 'target_words = [10, "x"]')
+    with pytest.raises(MissingDataError, match="target_words"):
+        load_niche("demo", _write(tmp_path, "demo", bad))
+
+def test_a_non_string_house_style_raises(tmp_path):
+    bad = GOOD.replace('house_style = "line art"', "house_style = 5")
+    with pytest.raises(MissingDataError, match=r"\[visual\]\.house_style"):
         load_niche("demo", _write(tmp_path, "demo", bad))
