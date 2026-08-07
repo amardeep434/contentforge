@@ -30,6 +30,20 @@ code is committed and green. Generate its review package (`BASE=f119f9c`, `HEAD=
 the Opus reviewer, then continue the loop: Task 3 → 3b → 4 → 5 → 6, then feature A (plan
 `2026-08-06-harvest.md`, 7 tasks).
 
+**UPDATE (later this session): feature B landed.** All six tasks of
+`docs/superpowers/plans/2026-08-06-niche-structure.md` are implemented and committed on
+`feat/niche-structure`. The multi-niche layout is `data/<niche>/videos/<slug>/{work,meta,final}/`
+(`run_dir_for` in `src/contentforge/pipeline.py`); the per-niche profile is `NicheConfig`
+(`src/contentforge/niche.py`), loaded from `data/<niche>/niche.toml` and validated field-by-field
+(fails loud with `MissingDataError` on anything missing or malformed — no auto-profiling, hand-authored
+only). `pipeline make`/`publish` both take `--niche` (default `business-economics`, which carries the
+original Mr-Finance constants unchanged). Docs: `docs/setup/niches.md` (new — the `niche.toml` schema
+and how to add a niche), `docs/setup/running-the-pipeline.md` and `README.md` (updated for the new run
+layout and `--niche`), plus the two hermes skills at `~/.hermes/skills/contentforge-video/SKILL.md`
+and `~/.hermes/skills/contentforge-render-status/SKILL.md`. **Feature A (harvest,
+`docs/superpowers/plans/2026-08-06-harvest.md`) is next** — it depends on B's `run_dir_for` and
+`niche=` factory kwargs.
+
 ---
 
 ## 1. Image model — RESOLVED: Qwen-Image, default, fail-loud
