@@ -44,3 +44,6 @@ data/quota/*.lock
 
 # lead runs: regenerable, and the screenshots are third-party content
 data/leads/
+
+# Serena MCP per-project cache (auto-generated when the serena MCP server runs here)
+.serena/
