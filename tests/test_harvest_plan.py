@@ -222,3 +222,51 @@ def test_disambiguate_slugs_no_collision_unchanged(tmp_path):
     entry = HarvestEntry("owning-a-car-wash", "T", "v1", "http://x/v1", "T")
     out = disambiguate_slugs([entry], niche, channel="chanB")
     assert out[0].slug == "owning-a-car-wash"
+
+
+def test_disambiguate_slugs_guards_against_within_batch_duplicate(tmp_path):
+    """foreign={x} + this channel's own entries [x, x-2] (build_plan already
+    deduped two same-title videos within-channel). x -> x-2 collides with the
+    second entry's own slug unless the guard checks `taken`, not just
+    `foreign`. Both outputs must end up distinct."""
+    from contentforge.harvest.plan import disambiguate_slugs
+
+    niche = tmp_path / "biz"
+    plan_a = niche / "harvest" / "chanA" / "plan.jsonl"
+    plan_a.parent.mkdir(parents=True)
+    plan_a.write_text(
+        json.dumps({"slug": "x", "topic": "T", "video_id": "v0",
+                    "url": "http://x/v0", "title": "T"}) + "\n",
+        encoding="utf-8",
+    )
+
+    entries = [
+        HarvestEntry("x", "T1", "v1", "http://x/v1", "T1"),
+        HarvestEntry("x-2", "T2", "v2", "http://x/v2", "T2"),
+    ]
+    out = disambiguate_slugs(entries, niche, channel="chanB")
+    slugs = [e.slug for e in out]
+    assert len(slugs) == len(set(slugs)), f"duplicate slugs: {slugs}"
+    assert slugs == ["x-2", "x-2-2"]
+
+
+def test_disambiguate_slugs_skips_corrupt_line_in_foreign_plan(tmp_path, caplog):
+    """A hand-edited/corrupt line in a DIFFERENT channel's plan.jsonl must not
+    abort this harvest; it should be logged and skipped, while good lines in
+    the same foreign plan still count."""
+    from contentforge.harvest.plan import disambiguate_slugs
+
+    niche = tmp_path / "biz"
+    plan_a = niche / "harvest" / "chanA" / "plan.jsonl"
+    plan_a.parent.mkdir(parents=True)
+    plan_a.write_text(
+        "not json at all\n" + json.dumps({"slug": "x", "topic": "T", "video_id": "v0",
+                                           "url": "http://x/v0", "title": "T"}) + "\n",
+        encoding="utf-8",
+    )
+
+    entry = HarvestEntry("x", "T1", "v1", "http://x/v1", "T1")
+    with caplog.at_level("WARNING"):
+        out = disambiguate_slugs([entry], niche, channel="chanB")
+    assert out[0].slug == "x-2"          # good foreign row "x" still claimed
+    assert any("plan.jsonl" in r.message for r in caplog.records)

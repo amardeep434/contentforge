@@ -104,13 +104,17 @@ def disambiguate_slugs(entries, niche_root, channel):
             if plan.parent.name == channel:
                 continue                      # our own plan — not a foreign claim
             for line in plan.read_text(encoding="utf-8").splitlines():
-                if line.strip():
+                if not line.strip():
+                    continue
+                try:
                     foreign.add(json.loads(line)["slug"])
+                except (ValueError, KeyError) as exc:
+                    _log.warning("skipping corrupt row in foreign plan %s: %s", plan, exc)
     taken = set(foreign)
     out = []
     for e in entries:
         slug = e.slug
-        if slug in foreign:
+        if slug in taken:
             n = 2
             while f"{e.slug}-{n}" in taken:
                 n += 1
