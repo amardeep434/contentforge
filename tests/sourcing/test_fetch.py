@@ -40,3 +40,12 @@ def test_loading_an_empty_directory_raises():
     with tempfile.TemporaryDirectory() as empty:
         with pytest.raises(MissingDataError):
             load_sources(Path(empty))
+
+
+def test_sources_saved_under_meta(tmp_path):
+    run = tmp_path / "run"
+    src = Source("http://x", "T", "body", NOW)
+    path = save_sources([src], run)
+    assert path == run / "meta" / "sources.json"
+    assert path.exists()
+    assert load_sources(run)[0].url == "http://x"

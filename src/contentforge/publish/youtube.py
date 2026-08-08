@@ -167,7 +167,8 @@ def record_upload(run_dir: Path, video_id: str, privacy: str) -> Path:
     Not a lock - a determined rerun with --force can still re-upload - but a
     visible record that this run already produced a video, and which one.
     """
-    path = run_dir / "published.json"
+    path = run_dir / "final" / "published.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({
         "video_id": video_id,
         "url": watch_url(video_id),

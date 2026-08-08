@@ -27,7 +27,7 @@ def test_is_gguf_model():
 def test_default_uses_qwen(monkeypatch, tmp_path):
     loaded = []
 
-    def fake_load(name, width=768, height=432):
+    def fake_load(name, width=768, height=432, **kwargs):
         loaded.append(name)
         return object(), (lambda prompt, path, seed: path), (lambda: None)
 
@@ -45,7 +45,7 @@ def test_qwen_failure_fails_loudly(monkeypatch, tmp_path):
     """A final render must never silently swap to a lower-quality model: if the
     default (Qwen) cannot load, the error propagates rather than falling back.
     """
-    def fake_load(name, width=768, height=432):
+    def fake_load(name, width=768, height=432, **kwargs):
         raise RuntimeError("simulated OOM at load")
 
     monkeypatch.delenv("CONTENTFORGE_IMAGE_MODEL", raising=False)
@@ -59,7 +59,7 @@ def test_qwen_failure_fails_loudly(monkeypatch, tmp_path):
 
 def test_explicit_draft_model_still_fails_loudly(monkeypatch, tmp_path):
     """An explicit choice (e.g. flux for a draft) also propagates load errors."""
-    def fake_load(name, width=768, height=432):
+    def fake_load(name, width=768, height=432, **kwargs):
         raise RuntimeError("simulated failure")
 
     monkeypatch.setattr(gguf_backends, "load_pipeline_and_generate", fake_load)

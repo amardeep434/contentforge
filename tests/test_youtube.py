@@ -142,7 +142,14 @@ def test_a_missing_thumbnail_raises(tmp_path):
 
 def test_the_upload_is_recorded_so_a_rerun_does_not_duplicate(tmp_path):
     path = record_upload(tmp_path, "vid123", "private")
+    assert path == tmp_path / "final" / "published.json"
     data = json.loads(path.read_text())
     assert data["video_id"] == "vid123"
     assert data["url"] == watch_url("vid123")
     assert "vid123" in data["url"]
+
+
+def test_record_upload_creates_the_final_dir_if_missing(tmp_path):
+    path = record_upload(tmp_path, "vid123", "private")
+    assert path.exists()
+    assert path.parent.name == "final"

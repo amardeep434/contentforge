@@ -173,7 +173,17 @@ Write the narration to a file — plain prose, one idea per sentence — then:
 pipeline make ceiling-fans --script-file my-script.txt
 ```
 
-`ceiling-fans` is the run name. Everything lands in `data/videos/ceiling-fans/`.
+`ceiling-fans` is the run name. Everything lands in
+`data/business-economics/videos/ceiling-fans/` — `business-economics` is the
+default niche and `data` is the default root. Videos for a different niche use
+`--niche`:
+
+```bash
+pipeline make ceiling-fans --script-file my-script.txt --niche art-history
+```
+
+See [niches.md](niches.md) for what a niche is, its `niche.toml` schema, and
+how to add one.
 
 Check the beats before spending hours of GPU time on them:
 
@@ -228,31 +238,63 @@ pipeline make ceiling-fans --topic 'how ceiling fans work' \
 Every factual claim in the generated script must trace to a source; a topic with
 no `--source` is refused rather than invented.
 
+To reword a transcript instead — a competitor's video, or any other
+transcript you already have — use `--transcript-file` with `--topic` in place
+of `--source`:
+
+```bash
+pipeline make ceiling-fans --topic 'how ceiling fans work' \
+    --transcript-file transcript.txt
+```
+
+The transcript is source material the script **transforms**, never relays —
+`check_verbatim` rejects a script that sits too close to it, with no flag to
+disable that check. With `--topic` set and neither `--script-file` nor
+`--transcript-file` given, `make` auto-uses
+`data/<niche>/videos/<slug>/meta/sources/reference-transcript.txt` when that
+file already exists (the auto-detect still needs `--topic` — without it the
+staged transcript is ignored). `harvest-make` always passes `--topic` per
+entry, so a video queued by `pipeline harvest` needs no `--transcript-file`
+flag. See [harvesting.md](harvesting.md) for pulling a whole channel's topics
+and transcripts and rendering them as a batch.
+
 To publish the result, see [publishing.md](publishing.md):
 
 ```bash
-pipeline publish ceiling-fans          # private by default, asks before uploading
+pipeline publish ceiling-fans --niche art-history   # private by default, asks before uploading
 ```
+
+(`--niche` defaults to `business-economics` on both `make` and `publish`, so it
+can be omitted for that niche.)
 
 ### What it leaves behind
 
+Every run directory is `data/<niche>/videos/<slug>/`, split into three
+sub-directories — `work/` (intermediate, safe to delete once a video is
+finished), `meta/` (the run's own record-keeping), and `final/` (the
+reviewable, publishable set):
+
 ```
-data/videos/ceiling-fans/
-  script.txt      what you wrote, or what was generated
-  sources.json    the primary sources a generated script was grounded in
-  spec.json       the visual plan - readable, and editable
-  manifest.json   every shot with its subject, lettering and duration
-  status.json     machine-readable per-stage state, plus what remains
-  run.log         human, timestamped, append-only trail of every stage event
-  audio/          one wav per beat
-  raw/            illustrations at generation size
-  frames/         finished 1920x1080 frames
-  video.mp4
-  subtitles.srt   timed captions, from the same shot timing
-  subtitles.vtt
-  metadata.json   title, description, tags — review before publishing
-  thumbnail.png   1280x720, built from a finished frame
-  published.json  written after a successful upload
+data/business-economics/videos/ceiling-fans/
+  meta/
+    script.txt      what you wrote, or what was generated
+    sources.json    the primary sources a generated script was grounded in
+    spec.json       the visual plan - readable, and editable
+    manifest.json   every shot with its subject, lettering and duration
+    status.json     machine-readable per-stage state, plus what remains
+    run.log         human, timestamped, append-only trail of every stage event
+  work/
+    audio/          one wav per beat
+    raw/            illustrations at generation size
+    frames/         finished 1920x1080 frames
+    ffmpeg/         ffmpeg scratch space
+  final/
+    video.mp4
+    subtitles.srt   timed captions, from the same shot timing
+    subtitles.vtt
+    metadata.json   title, description, tags — review before publishing
+    thumbnail.png   1280x720, built from a finished frame
+    published.json  written under final/ after a successful upload
 ```
 
 `status.json` records each stage as `pending`, `running`, `ok`, `skipped`,
@@ -334,6 +376,13 @@ between stages, so a normal render fits on a dedicated 6 GB card. If it still
 OOMs, something else is holding the GPU — a browser playing video keeps ~2 GB.
 Close it and rerun; finished work is kept.
 
+**On a 6 GB GPU that also drives your desktop session**, the `draw` stage
+(Qwen ~3.9 GiB, even FLUX) can OOM purely from desktop VRAM contention — not a
+pipeline bug. Confirmed this session: the niche-scoped run directory and every
+stage through `audio` ran correctly; `draw` only OOM'd because the desktop was
+also using the card. Render headless (no desktop compositor/browser holding
+VRAM) or on hermes (§6) instead.
+
 **`ffprobe not found`** — `sudo apt install ffmpeg`. Durations are measured from
 the audio files, never assumed, so this is not optional.
 
@@ -360,11 +409,11 @@ rebuild or a second machine is reproducible.
 
 **Renders are launched detached and polled, not run as a blocking command.** A
 Qwen video is ~10 h and a hermes terminal command times out in minutes, so the
-agent runs `setsid pipeline make … --root /root/videos &` and polls
-`status.json` (see the `contentforge-video` / `contentforge-render-status`
-skills). `terminal.lifetime_seconds` is raised so the container survives the run,
-and `daemon_term_grace_seconds` is raised so a SIGTERM can finish the current
-image before stopping.
+agent runs `setsid pipeline make … --niche <n> --root /root/videos &` and polls
+`meta/status.json` under the run directory (see the `contentforge-video` /
+`contentforge-render-status` skills). `terminal.lifetime_seconds` is raised so
+the container survives the run, and `daemon_term_grace_seconds` is raised so a
+SIGTERM can finish the current image before stopping.
 
 1. **GPU passthrough.** `nvidia-container-toolkit` on the host, then
    `--gpus=all` in the hermes `terminal.docker_extra_args`. Without the toolkit

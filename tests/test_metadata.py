@@ -8,6 +8,7 @@ from contentforge.errors import MissingDataError
 from contentforge.publish.metadata import (
     MAX_TAGS_TOTAL,
     MAX_TITLE,
+    SYSTEM,
     Metadata,
     generate_metadata,
     parse_metadata,
@@ -98,6 +99,31 @@ def test_generation_sends_the_script():
 
     generate_metadata(FakeClient(), "A ceiling fan moves air but never cools it.")
     assert "ceiling fan" in seen["user"]
+
+
+def test_generation_with_no_system_override_uses_the_module_default():
+    seen = {}
+
+    class FakeClient:
+        def complete(self, system, user, max_tokens=0):
+            seen["system"] = system
+            return payload()
+
+    generate_metadata(FakeClient(), "A ceiling fan moves air but never cools it.")
+    assert seen["system"] == SYSTEM
+
+
+def test_generation_with_a_system_override_sends_it_verbatim():
+    seen = {}
+
+    class FakeClient:
+        def complete(self, system, user, max_tokens=0):
+            seen["system"] = system
+            return payload()
+
+    generate_metadata(FakeClient(), "A ceiling fan moves air but never cools it.",
+                      system="a niche-owned prompt")
+    assert seen["system"] == "a niche-owned prompt"
 
 
 def test_generation_refuses_an_empty_script():

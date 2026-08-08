@@ -150,6 +150,22 @@ def test_the_manifest_records_what_the_video_is_made_of(tmp_path):
     assert manifest["duration_s"] == 12.0
     assert manifest["shots"][0]["subject"] == "subject 1"
     assert manifest["shots"][0]["text"].startswith("A ceiling fan")
+    assert manifest["music"] is None   # no niche given
+
+
+def test_the_manifest_records_the_niches_music_flag(tmp_path):
+    from contentforge.niche import NicheConfig
+
+    niche = NicheConfig(
+        name="n", title_format="T {subject}", house_style="HS", negative="NEG",
+        bg=(1, 2, 3), accent=(4, 5, 6), image_model="flux",
+        voice_reference=Path("/ref.wav"), pace=0.7, music=True,
+        script_system="SYS", metadata_system="MSYS", target_words=(100, 200),
+    )
+    fakes = Fakes(headings=False)
+    build(tmp_path, fakes, niche=niche)
+    manifest = json.loads((tmp_path / "run" / MANIFEST_NAME).read_text())
+    assert manifest["music"] is True
 
 
 # --- resuming ---------------------------------------------------------------
@@ -224,7 +240,7 @@ def test_a_failed_stage_is_recorded_durably_with_what_remains(tmp_path):
     with pytest.raises(RuntimeError, match="simulated OOM in draw"):
         build(tmp_path, fakes)
 
-    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    status = json.loads((tmp_path / "run" / "meta" / "status.json").read_text())
     stages = status["stages"]
     assert stages["script"] == "ok"
     assert stages["spec"] == "ok"
@@ -236,7 +252,7 @@ def test_a_failed_stage_is_recorded_durably_with_what_remains(tmp_path):
     assert "render" in status["remaining"]
     assert "simulated OOM in draw" in status["error"]
     # the human trail exists too
-    assert "FAILED" in (tmp_path / "run" / "run.log").read_text()
+    assert "FAILED" in (tmp_path / "run" / "meta" / "run.log").read_text()
 
 
 def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
@@ -255,7 +271,7 @@ def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
     finally:
         interrupt.clear()
 
-    status = json.loads((tmp_path / "run" / "status.json").read_text())
+    status = json.loads((tmp_path / "run" / "meta" / "status.json").read_text())
     stages = status["stages"]
     assert stages["script"] == "ok"
     assert stages["spec"] == "ok"
@@ -264,7 +280,7 @@ def test_a_requested_stop_is_recorded_as_clean_and_resumable(tmp_path):
     assert status["stopped"] == "audio"
     assert "draw" in status["remaining"]
     assert "error" not in status  # a stop is not an error
-    assert "STOPPED" in (tmp_path / "run" / "run.log").read_text()
+    assert "STOPPED" in (tmp_path / "run" / "meta" / "run.log").read_text()
 
 
 def test_an_upscaler_that_writes_nothing_raises(tmp_path):
@@ -285,9 +301,9 @@ def test_cleaning_keeps_the_hand_written_script(tmp_path):
     build(tmp_path, Fakes(headings=False))
     run_dir = tmp_path / "run"
     clean_run(run_dir)
-    assert (run_dir / "script.txt").exists()
+    assert (run_dir / "meta" / "script.txt").exists()
     assert not (run_dir / SPEC_NAME).exists()
-    assert not (run_dir / "video.mp4").exists()
+    assert not (run_dir / "final" / "video.mp4").exists()
 
 
 # --- script generation (stage 0) --------------------------------------------
@@ -303,6 +319,7 @@ def test_a_provided_script_is_used_verbatim(tmp_path):
 def test_a_cached_script_is_reused_and_the_writer_not_called(tmp_path):
     from contentforge.pipeline import SCRIPT_NAME, ensure_script
 
+    (tmp_path / SCRIPT_NAME).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / SCRIPT_NAME).write_text("Cached narration here.\n")
     called = []
     text, stage = ensure_script(tmp_path, None,
@@ -325,6 +342,7 @@ def test_the_writer_generates_when_nothing_exists(tmp_path):
 def test_forcing_script_regenerates_over_a_cached_one(tmp_path):
     from contentforge.pipeline import SCRIPT_NAME, ensure_script
 
+    (tmp_path / SCRIPT_NAME).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / SCRIPT_NAME).write_text("old\n")
     text, _ = ensure_script(tmp_path, None, writer=lambda d: "fresh [1]", force=True)
     assert text == "fresh [1]"
@@ -354,7 +372,7 @@ def test_build_video_generates_a_script_when_given_a_writer(tmp_path):
         script=None,
         scriptwriter=lambda d: SCRIPT,
     )
-    assert (tmp_path / "run" / "script.txt").read_text().startswith("A ceiling fan")
+    assert (tmp_path / "run" / "meta" / "script.txt").read_text().startswith("A ceiling fan")
     assert len(fakes.rendered[0]) == 3
 
 
@@ -470,3 +488,46 @@ def test_forcing_metadata_regenerates_it(tmp_path):
     build(tmp_path, Fakes(headings=False), script=None, metadata_writer=writer,
           force={"metadata"})
     assert len(calls) == 2
+
+
+def test_run_dir_is_grouped_by_niche(tmp_path):
+    from contentforge.pipeline import run_dir_for
+
+    assert run_dir_for(tmp_path, "biz", "laundromat") == (
+        tmp_path / "biz" / "videos" / "laundromat"
+    )
+
+
+def test_build_writes_into_work_meta_final(tmp_path):
+    fakes = Fakes()
+    build(tmp_path, fakes)                 # run_dir defaults to tmp_path / "run"
+    run = tmp_path / "run"
+    assert (run / "meta" / "spec.json").exists()
+    assert (run / "meta" / "status.json").exists()
+    assert (run / "meta" / "manifest.json").exists()
+    assert (run / "work" / "audio").is_dir()
+    assert (run / "work" / "raw").is_dir()
+    assert (run / "final" / "video.mp4").exists()
+    assert (run / "final" / "subtitles.srt").exists()
+
+
+def test_normalise_writes_the_given_background(tmp_path):
+    from PIL import Image
+    from contentforge.visuals import palette
+    src = tmp_path / "x.png"
+    dst = tmp_path / "y.png"
+    # A solid fill at the reference background colour flattens to itself (no
+    # texture, no chroma to stretch), so the final background-snap is the only
+    # thing left that can move a pixel - which is exactly what `background`
+    # controls.
+    Image.new("RGB", (32, 32), palette.REFERENCE_BACKGROUND).save(src)
+    palette.normalise(src, dst, background=(1, 2, 3))
+    pixels = list(Image.open(dst).convert("RGB").getdata())
+    assert pixels[0] == (1, 2, 3)
+    assert pixels.count((1, 2, 3)) == len(pixels)
+
+
+def test_chapter_label_accepts_a_colour():
+    from contentforge.visuals import caption
+    block = caption.chapter_label((1920, 1080), 2, colour=(4, 5, 6))
+    assert block.colour == (4, 5, 6)

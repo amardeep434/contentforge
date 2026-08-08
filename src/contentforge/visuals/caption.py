@@ -68,7 +68,7 @@ class TextBlock:
 
 
 def chapter_label(frame_size: tuple[int, int], number: int,
-                  size: int = 40) -> TextBlock:
+                  size: int = 40, colour: tuple[int, int, int] = ACCENT) -> TextBlock:
     """The chapter marker, lettered in the accent colour in the top-left corner.
 
     Top-left, not centred, so it sits out of the way of the heading and reads as
@@ -76,7 +76,7 @@ def chapter_label(frame_size: tuple[int, int], number: int,
     """
     return TextBlock(
         ordinal_word(number), MARGIN, int(frame_size[1] * 0.04),
-        size=size, font="heading", colour=ACCENT,
+        size=size, font="heading", colour=colour,
     )
 
 

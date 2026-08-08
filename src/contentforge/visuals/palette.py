@@ -162,7 +162,8 @@ def fit(reading: Reading, median: float = TARGET_SATURATION,
 
 def normalise(source: Path, destination: Path | None = None,
               median: float = TARGET_SATURATION,
-              p90: float = TARGET_P90) -> Reading:
+              p90: float = TARGET_P90,
+              background: tuple[int, int, int] = REFERENCE_BACKGROUND) -> Reading:
     """Rewrite a frame at the reference channel's chroma.
 
     Saturation only. Hue is left alone because the reference is not neutral -
@@ -196,7 +197,7 @@ def normalise(source: Path, destination: Path | None = None,
     # Snap to the reference's own background last. The stretch moves whatever
     # the first flatten settled on, and the background is the one colour in the
     # frame that can be matched exactly rather than approached.
-    image = flatten_background(image, measure(image), fill=REFERENCE_BACKGROUND)
+    image = flatten_background(image, measure(image), fill=background)
 
     out_path = destination or source
     out_path.parent.mkdir(parents=True, exist_ok=True)

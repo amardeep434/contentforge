@@ -20,6 +20,8 @@ from contentforge.errors import (
     MissingDataError,
     ResourceNotFoundError,
 )
+from contentforge.harvest.plan import build_plan, disambiguate_slugs, read_plan, write_plan
+from contentforge.harvest.transcripts import fetch_transcript
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.quota_monitor import (
     DEFAULT_QUOTA_ID,
@@ -188,6 +190,27 @@ def _live_transport(api_key: str):
     return _transport
 
 
+def _make_writer(args, run_dir, cfg):
+    """Build the `make` scriptwriter, preferring a transcript over --source URLs.
+
+    Checks --transcript-file, then falls back to an auto-detected harvested
+    transcript staged at meta/sources/reference-transcript.txt (only when
+    --script-file isn't already supplying the script).
+    """
+    from contentforge import runtime
+
+    transcript_path = args.transcript_file
+    if transcript_path is None and not args.script_file:
+        staged = run_dir / "meta" / "sources" / "reference-transcript.txt"
+        if staged.exists():
+            transcript_path = staged
+    if args.topic and transcript_path is not None:
+        source = runtime.source_from_transcript(
+            args.topic, Path(transcript_path).read_text(encoding="utf-8"))
+        return runtime.scriptwriter(args.topic, [], niche=cfg, sources=[source])
+    return runtime.scriptwriter(args.topic, args.source, niche=cfg) if args.topic else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline")
     parser.add_argument(
@@ -311,7 +334,15 @@ def main(argv: list[str] | None = None) -> int:
         "--source", action="append", default=[], metavar="URL",
         help="a primary source to ground the generated script; repeatable",
     )
-    make.add_argument("--root", type=Path, default=Path("data/videos"))
+    make.add_argument(
+        "--transcript-file", type=Path, default=None,
+        help="reword this local transcript instead of fetching --source URLs",
+    )
+    make.add_argument("--root", type=Path, default=Path("data"))
+    make.add_argument(
+        "--niche", default="business-economics",
+        help="niche profile under --root/<niche>/niche.toml",
+    )
     make.add_argument(
         "--force", action="append", default=[],
         choices=["script", "spec", "audio", "draw", "letter", "render",
@@ -343,7 +374,11 @@ def main(argv: list[str] | None = None) -> int:
         help="upload a rendered video to YouTube (private by default)",
     )
     pub.add_argument("slug", help="run name under --root, the video to publish")
-    pub.add_argument("--root", type=Path, default=Path("data/videos"))
+    pub.add_argument("--root", type=Path, default=Path("data"))
+    pub.add_argument(
+        "--niche", default="business-economics",
+        help="niche profile under --root/<niche>/niche.toml",
+    )
     pub.add_argument(
         "--privacy", default="private", choices=["private", "unlisted", "public"],
         help="private (default) appears only in your dashboard until you change it",
@@ -393,6 +428,22 @@ def main(argv: list[str] | None = None) -> int:
         "--rpm", type=float, default=None,
         help="assumed RPM for an implied earnings figure (never a measurement)",
     )
+
+    harvest = subparsers.add_parser(
+        "harvest", help="channel -> plan.jsonl + staged transcripts"
+    )
+    harvest.add_argument("channel", help="@handle or UC… channel id")
+    harvest.add_argument("--niche", default="business-economics")
+    harvest.add_argument("--limit", type=int, default=20)
+    harvest.add_argument("--root", type=Path, default=Path("data"))
+    harvest.add_argument("--profile", default=None)
+
+    hmake = subparsers.add_parser("harvest-make", help="render every video in a harvest plan")
+    hmake.add_argument("channel", help="the channel whose plan.jsonl to run")
+    hmake.add_argument("--niche", default="business-economics")
+    hmake.add_argument("--root", type=Path, default=Path("data"))
+    hmake.add_argument("--model", default=None, help="diffusion model (e.g. flux for a draft batch)")
+
     args = parser.parse_args(argv)
 
     if args.command == "illustrate":
@@ -423,21 +474,33 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "make":
         from contentforge import runtime
-        from contentforge.pipeline import beats_for, build_video, load_or_write_script
+        from contentforge.pipeline import (
+            beats_for,
+            build_video,
+            ensure_script,
+            run_dir_for,
+        )
 
-        from contentforge.pipeline import ensure_script
-
-        run_dir = args.root / args.slug
+        run_dir = run_dir_for(args.root, args.niche, args.slug)
         script = args.script_file.read_text() if args.script_file else None
-        writer = runtime.scriptwriter(args.topic, args.source) if args.topic else None
 
         if args.dry_run:
+            # A dry run needs no niche.toml on disk: it uses default
+            # (non-niche) prompts on the path where it does generate - when
+            # --topic is given with --source or a --transcript-file/staged
+            # transcript (cfg=None here). Only the niche-scoped run dir matters.
+            writer = _make_writer(args, run_dir, None)
             text, _ = ensure_script(run_dir, script, writer)
             beats = beats_for(text)
             print(f"  {len(beats)} beats, {sum(len(b.split()) for b in beats)} words")
             for index, beat in enumerate(beats, start=1):
                 print(f"  {index:3d}  {beat[:96]}")
             return 0
+
+        from contentforge.niche import load_niche
+
+        cfg = load_niche(args.niche, args.root)
+        writer = _make_writer(args, run_dir, cfg)
 
         all_stages = {"script", "spec", "audio", "draw", "letter", "render",
                       "metadata", "thumbnail"}
@@ -452,22 +515,106 @@ def main(argv: list[str] | None = None) -> int:
             video = build_video(
                 run_dir=run_dir,
                 planner=runtime.spec_planner(),
-                speak=runtime.speaker(args.voice_backend, args.voice),
-                illustrator=runtime.illustrator(args.model),
+                speak=runtime.speaker(niche=cfg, backend=args.voice_backend, voice=args.voice),
+                illustrator=runtime.illustrator(niche=cfg, model=args.model),
                 upscaler=runtime.upscaler(),
                 renderer=runtime.renderer(),
-                metadata_writer=runtime.metadata_writer(),
+                metadata_writer=runtime.metadata_writer(niche=cfg),
                 headline=args.headline,
                 script=script,
                 scriptwriter=writer,
                 force=stages,
+                niche=cfg,
             )
         except interrupt.StopRequested:
             print(f"\n  stopped safely. finished work is saved in {run_dir}/")
-            print(f"  resume by re-running: pipeline make {args.slug}")
+            print(f"  resume by re-running: pipeline make {args.slug} --niche {args.niche}")
             return 130  # conventional exit code for interrupted-by-signal
         print(f"\n  {video}")
-        print(f"  review everything in {run_dir}/ before `pipeline publish {args.slug}`")
+        print(
+            f"  review everything in {run_dir}/ before "
+            f"`pipeline publish {args.slug} --niche {args.niche}`"
+        )
+        return 0
+
+    if args.command == "harvest":
+        from contentforge.pipeline import run_dir_for
+
+        api_key, ledger_path = _credential(args.profile)
+        now = datetime.now(timezone.utc)
+        ledger = load_ledger(ledger_path, now)
+        started = ledger.spent
+        client = YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
+        holder = {"ledger": ledger}
+        try:
+            entries, ledger = build_plan(
+                client, args.channel, ledger, args.limit,
+                on_ledger=lambda l: holder.__setitem__("ledger", l),
+            )
+        finally:
+            # Persist the quota spent during build_plan, even on a mid-call
+            # failure: on_ledger captures the latest ledger after each
+            # completed API call, so partial spend is never lost.
+            save_ledger(ledger_path, holder["ledger"], now, started)
+
+        entries = disambiguate_slugs(entries, args.root / args.niche, args.channel)
+
+        kept = []
+        for entry in entries:
+            try:
+                transcript = fetch_transcript(entry.url)
+            except MissingDataError as exc:
+                print(f"  skip {entry.slug}: {exc}")
+                continue
+            sources = run_dir_for(args.root, args.niche, entry.slug) / "meta" / "sources"
+            sources.mkdir(parents=True, exist_ok=True)
+            (sources / "reference-transcript.txt").write_text(transcript, encoding="utf-8")
+            kept.append(entry)
+            print(f"  {entry.slug}  {entry.topic}")
+
+        plan_path = write_plan(kept, args.root / args.niche, args.channel)
+        print(f"\n  {len(kept)} videos harvested -> {plan_path}")
+        print(f"  review/prune it, then: pipeline harvest-make {args.channel} --niche {args.niche}")
+        return 0
+
+    if args.command == "harvest-make":
+        from contentforge import runtime
+        from contentforge.niche import load_niche
+        from contentforge.harvest.batch import run_batch
+        from contentforge.pipeline import build_video, run_dir_for
+
+        cfg = load_niche(args.niche, args.root)
+        entries = read_plan(args.root / args.niche, args.channel)
+
+        def build_one(entry):
+            run_dir = run_dir_for(args.root, args.niche, entry.slug)
+            staged = run_dir / "meta" / "sources" / "reference-transcript.txt"
+            if not staged.exists():
+                raise MissingDataError(
+                    f"{entry.slug}: no staged transcript at {staged}; "
+                    f"re-run `pipeline harvest {args.channel} --niche {args.niche}`")
+            source = runtime.source_from_transcript(
+                entry.topic, staged.read_text(encoding="utf-8"))
+            writer = runtime.scriptwriter(entry.topic, [], niche=cfg, sources=[source])
+            build_video(
+                run_dir=run_dir,
+                planner=runtime.spec_planner(),
+                speak=runtime.speaker(niche=cfg),
+                illustrator=runtime.illustrator(niche=cfg, model=args.model),
+                upscaler=runtime.upscaler(),
+                renderer=runtime.renderer(),
+                metadata_writer=runtime.metadata_writer(niche=cfg),
+                scriptwriter=writer,
+                force=set(),
+                niche=cfg,
+            )
+
+        # run_batch arms interrupt once for the whole batch; build_video must NOT
+        # re-arm (it does not) so a single Ctrl-C stops the batch gracefully.
+        ledger = run_batch(entries, args.niche, args.root, build_one, channel=args.channel)
+        done = sum(1 for v in ledger.values() if v["status"] == "done")
+        print(f"\n  {done}/{len(ledger)} videos done -> "
+              f"{args.root}/{args.niche}/harvest/{args.channel}/batch.json")
         return 0
 
     if args.command == "publish":
@@ -476,10 +623,11 @@ def main(argv: list[str] | None = None) -> int:
             THUMBNAIL_NAME,
             VIDEO_NAME,
             load_metadata,
+            run_dir_for,
         )
         from contentforge.publish import youtube
 
-        run_dir = args.root / args.slug
+        run_dir = run_dir_for(args.root, args.niche, args.slug)
         video = run_dir / VIDEO_NAME
         thumb = run_dir / THUMBNAIL_NAME
         # Publish only uploads what `make` already produced and you reviewed;
@@ -489,7 +637,8 @@ def main(argv: list[str] | None = None) -> int:
                              (thumb, "thumbnail")):
             if not needed.exists():
                 raise MissingDataError(
-                    f"no {what} at {needed}; run `pipeline make {args.slug}` and "
+                    f"no {what} at {needed}; run "
+                    f"`pipeline make {args.slug} --niche {args.niche}` and "
                     "review the run directory before publishing"
                 )
         meta = load_metadata(run_dir)

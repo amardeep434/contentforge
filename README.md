@@ -51,6 +51,15 @@ One command, one run directory, resumable stages:
 
     script → spec → audio → draw → letter → render → metadata → thumbnail
 
+Every run is scoped to a niche — a subject, illustration look, voice and title
+format bundled in `data/<niche>/niche.toml`
+([docs/setup/niches.md](docs/setup/niches.md)) — via `--niche` (default
+`business-economics`). Everything lands in
+`data/<niche>/videos/<slug>/{work,meta,final}/`: `work/` is scratch, `meta/`
+is the run's own record-keeping (`status.json`, `run.log`, `spec.json`,
+`manifest.json`), and `final/` is the reviewable, publishable set
+(`video.mp4`, `subtitles.srt`/`.vtt`, `metadata.json`, `thumbnail.png`).
+
 `script` is either hand-written (`--script-file`), generated from `--topic` +
 `--source` URLs (grounded in them, checked for verbatim lifting), or a cached
 `script.txt`. Narration is **OmniVoice**, local and offline, no API key
@@ -65,7 +74,7 @@ Each stage writes a named artefact and is skipped if it is already there; within
 a stage, finished items (audio clips, images, frames) are kept too. So a rerun
 after a crash — or after a **safe stop** (Ctrl-C finishes the current item, then
 stops cleanly and records where it stopped) — resumes rather than restarting.
-Progress is written live to `status.json` and `run.log` in the run directory.
+Progress is written live to `meta/status.json` and `meta/run.log` in the run directory.
 `--force draw` redoes one stage. `spec.json` is the visual plan and is meant to
 be edited by hand — it is the cheapest place to fix a video.
 
@@ -73,6 +82,10 @@ The lettering, the drawn sheet it sits on and the palette correction are all
 production stages, not post-processing: measured against a native frame from the
 reference channel, the gap was never resolution (C-060), it was that theirs
 carries a legible document and a flat cream background and ours did not.
+
+A validated competitor channel can be harvested into a batch of videos in your
+own niche's style, transcript-transformed rather than relayed — see
+[docs/setup/harvesting.md](docs/setup/harvesting.md).
 
 Full walkthrough: [docs/setup/running-the-pipeline.md](docs/setup/running-the-pipeline.md).
 Publishing: [docs/setup/publishing.md](docs/setup/publishing.md).

@@ -75,7 +75,9 @@ def choose_shape(topic: str, previous: str | None = None) -> str:
 
 
 def generate_script(client: LLMClient, topic: str, sources: list[Source],
-                    shape: str) -> str:
+                    shape: str, system: str = SYSTEM,
+                    target_words: tuple[int, int] = (TARGET_WORDS_LOW, TARGET_WORDS_HIGH)
+                    ) -> str:
     if not sources:
         raise MissingDataError(
             f"no sources for {topic!r}; refusing to generate an ungrounded script"
@@ -88,8 +90,8 @@ def generate_script(client: LLMClient, topic: str, sources: list[Source],
         f"Subject: {topic}\n"
         f"Structure for this video: {shape}\n\n"
         f"Sources:\n\n{catalogue}\n\n"
-        f"Write {TARGET_WORDS_LOW}-{TARGET_WORDS_HIGH} words of narration in the "
+        f"Write {target_words[0]}-{target_words[1]} words of narration in the "
         "voice and structure above. Open on the reframe in the first two "
         "sentences. Keep it grounded in the sources throughout."
     )
-    return client.complete(SYSTEM, user, max_tokens=8000)
+    return client.complete(system, user, max_tokens=8000)
