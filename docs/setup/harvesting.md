@@ -79,19 +79,16 @@ title that slugifies to nothing (e.g. all-punctuation, or fully non-ASCII)
 falls back to the video id, and collisions get a deterministic `-2`, `-3`
 suffix.
 
-### Scope: one channel per niche
+### Slugs are unique across channels in a niche
 
-Slug uniqueness is enforced only *within* a single channel's plan. Two
-**different** channels harvested into the **same** niche whose titles
-slugify identically would map to the same
-`data/<niche>/videos/<slug>/` — the second harvest could overwrite the
-first's staged transcript, or, if the first is already rendered, get skipped
-by `harvest-make` as "done" and silently reuse the first channel's video.
-Harvest one channel per niche, or make sure titles won't collide across
-channels sharing a niche. A channel-namespaced run-dir layout would remove
-this limitation but isn't done here — it would have to preserve same-channel
-resume (re-running `harvest`/`harvest-make` for one channel must still land
-on the same slugs), which is why it's left as a possible future change.
+Slug uniqueness isn't just enforced *within* one channel's plan — it's
+enforced across every channel harvested into the same niche. If a second
+channel's title slugifies to a slug another channel already claimed in
+`data/<niche>/harvest/<other-channel>/plan.jsonl`, it gets a deterministic
+`-2`, `-3` suffix before it's staged, so two channels sharing a niche never
+collide on `data/<niche>/videos/<slug>/`. Re-harvesting the same channel is
+still idempotent: only *foreign* plans can bump a slug, so a channel's own
+slugs stay stable across resumes.
 
 `harvest` finishes by printing how many videos it kept and where the plan
 landed, with a hint to review it before rendering:

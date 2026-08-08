@@ -123,3 +123,102 @@ def test_write_plan_warns_when_overwriting_existing_plan(tmp_path, caplog):
     with caplog.at_level("WARNING"):
         write_plan(entries, tmp_path / "biz", "chan")
     assert any("overwriting" in r.message for r in caplog.records)
+
+
+def test_build_plan_calls_on_ledger_after_each_completed_api_call():
+    """The handler needs the latest ledger even if a later call in build_plan
+    raises, so on_ledger must fire after every completed call, in order,
+    with strictly increasing spend (each fake call charges the real ledger)."""
+    from contentforge.harvest.plan import build_plan
+    from contentforge.providers.quota import QuotaLedger
+
+    class FakeClient:
+        def channel_by_handle(self, handle, ledger):
+            return _FakeFacts(), ledger.charge("channels.list")
+        def get_uploads_playlists(self, ids, ledger):
+            return {ids[0]: "UU_uploads"}, ledger.charge("playlistItems.list")
+        def get_playlist_video_ids(self, playlist_id, ledger, max_videos):
+            return ["v1"], ledger.charge("playlistItems.list")
+        def get_videos(self, ids, ledger):
+            return [_FakeVideo("v1", "Owning a Laundromat")], ledger.charge("videos.list")
+
+    seen = []
+    entries, final_ledger = build_plan(
+        FakeClient(), "@somechannel", ledger=QuotaLedger(), limit=10,
+        on_ledger=seen.append,
+    )
+    assert [e.slug for e in entries] == ["owning-a-laundromat"]
+    assert len(seen) == 4
+    spends = [l.spent for l in seen]
+    assert spends == sorted(spends) and spends[0] > 0
+    assert seen[-1].spent == final_ledger.spent
+
+
+def test_build_plan_on_ledger_captures_partial_spend_on_mid_call_failure():
+    """If get_playlist_video_ids raises (e.g. empty channel), on_ledger must
+    already have captured the two calls billed before it."""
+    from contentforge.harvest.plan import build_plan
+    from contentforge.providers.quota import QuotaLedger
+
+    class FakeClient:
+        def channel_by_handle(self, handle, ledger):
+            return _FakeFacts(), ledger.charge("channels.list")
+        def get_uploads_playlists(self, ids, ledger):
+            return {ids[0]: "UU_uploads"}, ledger.charge("playlistItems.list")
+        def get_playlist_video_ids(self, playlist_id, ledger, max_videos):
+            return [], ledger.charge("playlistItems.list")   # empty -> raises below
+        def get_videos(self, ids, ledger):
+            raise AssertionError("should never be called")
+
+    seen = []
+    with pytest.raises(MissingDataError):
+        build_plan(FakeClient(), "@somechannel", ledger=QuotaLedger(), limit=10,
+                   on_ledger=seen.append)
+    assert len(seen) == 3          # channel_by_handle, get_uploads_playlists, get_playlist_video_ids
+    assert seen[-1].spent > 0
+
+
+def test_disambiguate_slugs_suffixes_collision_with_foreign_channel(tmp_path):
+    from contentforge.harvest.plan import disambiguate_slugs
+
+    niche = tmp_path / "biz"
+    plan_a = niche / "harvest" / "chanA" / "plan.jsonl"
+    plan_a.parent.mkdir(parents=True)
+    plan_a.write_text(
+        json.dumps({"slug": "owning-a-laundromat", "topic": "T", "video_id": "v1",
+                    "url": "http://x/v1", "title": "T"}) + "\n",
+        encoding="utf-8",
+    )
+
+    entry_b = HarvestEntry("owning-a-laundromat", "T2", "v2", "http://x/v2", "T2")
+    out = disambiguate_slugs([entry_b], niche, channel="chanB")
+    assert out[0].slug == "owning-a-laundromat-2"
+    assert out[0].topic == "T2" and out[0].video_id == "v2"   # only slug changed
+
+
+def test_disambiguate_slugs_leaves_same_channel_slug_unchanged(tmp_path):
+    """Resume: re-harvesting chanA against its own existing plan must not
+    suffix its own slugs."""
+    from contentforge.harvest.plan import disambiguate_slugs
+
+    niche = tmp_path / "biz"
+    plan_a = niche / "harvest" / "chanA" / "plan.jsonl"
+    plan_a.parent.mkdir(parents=True)
+    plan_a.write_text(
+        json.dumps({"slug": "owning-a-laundromat", "topic": "T", "video_id": "v1",
+                    "url": "http://x/v1", "title": "T"}) + "\n",
+        encoding="utf-8",
+    )
+
+    entry_a = HarvestEntry("owning-a-laundromat", "T", "v1", "http://x/v1", "T")
+    out = disambiguate_slugs([entry_a], niche, channel="chanA")
+    assert out[0].slug == "owning-a-laundromat"
+
+
+def test_disambiguate_slugs_no_collision_unchanged(tmp_path):
+    from contentforge.harvest.plan import disambiguate_slugs
+
+    niche = tmp_path / "biz"
+    entry = HarvestEntry("owning-a-car-wash", "T", "v1", "http://x/v1", "T")
+    out = disambiguate_slugs([entry], niche, channel="chanB")
+    assert out[0].slug == "owning-a-car-wash"

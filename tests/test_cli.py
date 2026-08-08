@@ -98,7 +98,8 @@ def test_harvest_writes_plan_and_stages_transcripts(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
     monkeypatch.setattr(cli, "load_ledger", lambda path, now: SimpleNamespace(spent=0))
     monkeypatch.setattr(cli, "save_ledger", lambda path, ledger, now, started: None)
-    monkeypatch.setattr(cli, "build_plan", lambda client, channel, ledger, limit: ([e1, e2], ledger))
+    monkeypatch.setattr(cli, "build_plan",
+                         lambda client, channel, ledger, limit, on_ledger=None: ([e1, e2], ledger))
 
     def fake_fetch(url):
         if url.endswith("v1"):
@@ -114,6 +115,81 @@ def test_harvest_writes_plan_and_stages_transcripts(tmp_path, monkeypatch):
     staged = tmp_path / "biz" / "videos" / "owning-a-laundromat" / "meta" / "sources" / "reference-transcript.txt"
     assert staged.read_text() == "TRANSCRIPT ONE"
     assert not (tmp_path / "biz" / "videos" / "owning-a-car-wash").exists()
+
+
+def test_harvest_persists_partial_quota_spend_when_build_plan_raises_mid_call(tmp_path, monkeypatch):
+    """build_plan can raise after some of its 4 API calls already billed quota
+    (e.g. MissingDataError for an empty channel, after channel_by_handle +
+    get_uploads_playlists spent real units). The handler must persist that
+    partial spend, not the pre-call `ledger`."""
+    from types import SimpleNamespace
+    import pytest
+    import contentforge.cli as cli
+    from contentforge.errors import MissingDataError
+    from contentforge.providers.quota import QuotaLedger
+
+    started_ledger = QuotaLedger()
+    monkeypatch.setattr(cli, "_credential", lambda profile: ("key", tmp_path / "ledger.json"))
+    monkeypatch.setattr(cli, "_live_transport", lambda api_key: (lambda endpoint, params: {}))
+    monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
+    monkeypatch.setattr(cli, "load_ledger", lambda path, now: started_ledger)
+
+    saved = {}
+    def fake_save_ledger(path, ledger, now, started):
+        saved["ledger"] = ledger
+    monkeypatch.setattr(cli, "save_ledger", fake_save_ledger)
+
+    def fake_build_plan(client, channel, ledger, limit, on_ledger=None):
+        l1 = ledger.charge("channels.list")
+        if on_ledger:
+            on_ledger(l1)
+        l2 = l1.charge("playlistItems.list")
+        if on_ledger:
+            on_ledger(l2)
+        raise MissingDataError("no videos found for channel")
+    monkeypatch.setattr(cli, "build_plan", fake_build_plan)
+
+    with pytest.raises(MissingDataError):
+        cli.main(["harvest", "somechannel", "--niche", "biz", "--root", str(tmp_path)])
+
+    assert saved["ledger"].spent == started_ledger.spent + 1 + 1   # channels.list + playlistItems.list
+    assert saved["ledger"].spent > started_ledger.spent
+
+
+def test_harvest_disambiguates_slugs_against_other_channels_in_same_niche(tmp_path, monkeypatch):
+    """Two different channels harvested into the same niche whose titles
+    slugify identically must not collide on data/<niche>/videos/<slug>/."""
+    from types import SimpleNamespace
+    import contentforge.cli as cli
+    from contentforge.harvest.plan import HarvestEntry, write_plan
+
+    # chanA already has a plan claiming this slug.
+    write_plan([HarvestEntry("owning-a-laundromat", "T", "v1", "http://x/v1", "T")],
+               tmp_path / "biz", "chanA")
+
+    e_b = HarvestEntry("owning-a-laundromat", "Owning a Laundromat", "v2",
+                        "https://www.youtube.com/watch?v=v2", "Owning a Laundromat")
+
+    monkeypatch.setattr(cli, "_credential", lambda profile: ("key", tmp_path / "ledger.json"))
+    monkeypatch.setattr(cli, "_live_transport", lambda api_key: (lambda endpoint, params: {}))
+    monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
+    monkeypatch.setattr(cli, "load_ledger", lambda path, now: SimpleNamespace(spent=0))
+    monkeypatch.setattr(cli, "save_ledger", lambda path, ledger, now, started: None)
+    monkeypatch.setattr(cli, "build_plan",
+                         lambda client, channel, ledger, limit, on_ledger=None: ([e_b], ledger))
+    monkeypatch.setattr(cli, "fetch_transcript", lambda url: "TRANSCRIPT B")
+
+    rc = cli.main(["harvest", "chanB", "--niche", "biz", "--root", str(tmp_path)])
+    assert rc == 0
+
+    plan = (tmp_path / "biz" / "harvest" / "chanB" / "plan.jsonl").read_text()
+    assert "owning-a-laundromat-2" in plan
+    staged = (tmp_path / "biz" / "videos" / "owning-a-laundromat-2"
+              / "meta" / "sources" / "reference-transcript.txt")
+    assert staged.read_text() == "TRANSCRIPT B"
+    # chanA's own staged transcript dir must be untouched
+    assert not (tmp_path / "biz" / "videos" / "owning-a-laundromat"
+                / "meta" / "sources" / "reference-transcript.txt").exists()
 
 
 def test_harvest_make_runs_batch_over_plan_entries(tmp_path, monkeypatch):
@@ -174,7 +250,8 @@ def test_harvest_then_harvest_make_end_to_end(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "YouTubeClient", lambda api_key, transport: object())
     monkeypatch.setattr(cli, "load_ledger", lambda path, now: SimpleNamespace(spent=0))
     monkeypatch.setattr(cli, "save_ledger", lambda path, ledger, now, started: None)
-    monkeypatch.setattr(cli, "build_plan", lambda client, channel, ledger, limit: ([e1, e2], ledger))
+    monkeypatch.setattr(cli, "build_plan",
+                         lambda client, channel, ledger, limit, on_ledger=None: ([e1, e2], ledger))
 
     def fake_fetch(url):
         if url.endswith("v1"):

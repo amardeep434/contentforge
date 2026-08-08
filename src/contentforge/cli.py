@@ -20,7 +20,7 @@ from contentforge.errors import (
     MissingDataError,
     ResourceNotFoundError,
 )
-from contentforge.harvest.plan import build_plan, read_plan, write_plan
+from contentforge.harvest.plan import build_plan, disambiguate_slugs, read_plan, write_plan
 from contentforge.harvest.transcripts import fetch_transcript
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.quota_monitor import (
@@ -545,14 +545,19 @@ def main(argv: list[str] | None = None) -> int:
         ledger = load_ledger(ledger_path, now)
         started = ledger.spent
         client = YouTubeClient(api_key=api_key, transport=_live_transport(api_key))
+        holder = {"ledger": ledger}
         try:
-            entries, ledger = build_plan(client, args.channel, ledger, args.limit)
+            entries, ledger = build_plan(
+                client, args.channel, ledger, args.limit,
+                on_ledger=lambda l: holder.__setitem__("ledger", l),
+            )
         finally:
-            # Persist the quota spent during build_plan. (A
-            # mid-call failure in build_plan under-records by the calls
-            # already billed - the same return-at-end ledger-threading
-            # limitation every command here shares.)
-            save_ledger(ledger_path, ledger, now, started)
+            # Persist the quota spent during build_plan, even on a mid-call
+            # failure: on_ledger captures the latest ledger after each
+            # completed API call, so partial spend is never lost.
+            save_ledger(ledger_path, holder["ledger"], now, started)
+
+        entries = disambiguate_slugs(entries, args.root / args.niche, args.channel)
 
         kept = []
         for entry in entries:
