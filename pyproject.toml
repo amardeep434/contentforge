@@ -48,6 +48,10 @@ voice = [
 # binary invoked as a subprocess, not the Python API.
 harvest = [
     "yt-dlp>=2024.0",
+    # httplib2 (googleapiclient's transport) ignores HTTPS_PROXY; PySocks lets it
+    # route the YouTube Data API through an authenticated proxy in a sandbox with
+    # no direct internet (hermes). See cli._proxy_http.
+    "pysocks>=1.7",
 ]
 
 [project.scripts]

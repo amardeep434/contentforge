@@ -304,3 +304,33 @@ def test_harvest_then_harvest_make_end_to_end(tmp_path, monkeypatch):
     )
     assert batch["owning-a-laundromat"]["status"] == "done"
     assert batch["owning-a-car-wash"]["status"] == "done"
+
+
+def test_proxy_http_direct_without_proxy(monkeypatch):
+    import httplib2
+    from contentforge.cli import _proxy_http
+    for v in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(v, raising=False)
+    assert isinstance(_proxy_http(), httplib2.Http)
+
+
+def test_proxy_http_parses_authenticated_proxy(monkeypatch):
+    import socks
+    from contentforge.cli import _proxy_http
+    monkeypatch.setenv("HTTPS_PROXY", "http://scraper:secret@scrape-proxy:3128")
+    pi = _proxy_http().proxy_info
+    assert pi is not None
+    assert pi.proxy_host == "scrape-proxy"
+    assert pi.proxy_port == 3128
+    assert pi.proxy_user == "scraper"
+    assert pi.proxy_pass == "secret"
+    assert pi.proxy_type == socks.PROXY_TYPE_HTTP
+
+
+def test_proxy_http_unauthenticated_proxy(monkeypatch):
+    from contentforge.cli import _proxy_http
+    monkeypatch.setenv("HTTPS_PROXY", "http://myproxy:8080")
+    pi = _proxy_http().proxy_info
+    assert pi.proxy_host == "myproxy"
+    assert pi.proxy_port == 8080
+    assert pi.proxy_user is None

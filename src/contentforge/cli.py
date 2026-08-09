@@ -171,11 +171,48 @@ def _redact(text: str) -> str:
     return re.sub(r"key=[A-Za-z0-9_\-]+", "key=REDACTED", text)
 
 
+def _proxy_http():
+    """An httplib2 client routed through the proxy from the environment.
+
+    httplib2 (googleapiclient's transport) does not honour the standard
+    HTTP(S)_PROXY variables, so in a proxied sandbox with no direct internet
+    (e.g. hermes behind scrape-proxy) every YouTube API call dies with
+    ServerNotFoundError. Build an explicit ProxyInfo from the env when present;
+    a plain direct client otherwise (the host has no proxy env and is
+    unaffected). Authenticated proxies need PySocks — the ``[harvest]`` extra
+    installs it; without it we fall back to a direct client rather than crash.
+    """
+    from httplib2 import Http, ProxyInfo
+
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if not proxy:
+        return Http(timeout=30)
+    match = re.match(r"https?://(?:([^:@/]+):([^@/]*)@)?([^:/]+):(\d+)", proxy)
+    if not match:
+        return Http(timeout=30)
+    user, password, host, port = match.groups()
+    try:
+        import socks
+    except ImportError:
+        return Http(timeout=30)
+    info = ProxyInfo(
+        proxy_type=socks.PROXY_TYPE_HTTP,
+        proxy_host=host,
+        proxy_port=int(port),
+        proxy_user=user or None,
+        proxy_pass=password or None,
+    )
+    return Http(proxy_info=info, timeout=30)
+
+
 def _live_transport(api_key: str):
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
 
-    service = build("youtube", "v3", developerKey=api_key, cache_discovery=False)
+    service = build(
+        "youtube", "v3", developerKey=api_key,
+        cache_discovery=False, http=_proxy_http(),
+    )
 
     def _transport(endpoint: str, params: dict) -> dict:
         resource, method = endpoint.split(".")
