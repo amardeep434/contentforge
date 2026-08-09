@@ -24,6 +24,13 @@ from contentforge.errors import MissingDataError
 # import of this module (imported before any model loads) and only if unset.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
+#: How many times the scriptwriter regenerates when the policy gate rejects a
+#: draft, feeding the violations back each time. Bounded so a script that is
+#: fundamentally a re-read of a source hard-fails to the operator instead of
+#: looping until it sneaks past a word-overlap check. Matches spec.py's attempts=2
+#: pattern; 3 leaves two feedback-corrected retries after the first draft.
+SCRIPT_ATTEMPTS = 3
+
 #: Qwen-Image draws the house line-art style best and is the only model that
 #: obeys "stick figure" instead of drawing a detailed person, so it is the model
 #: for *every* final render - one video looks like one video. It is a GGUF model
@@ -96,7 +103,7 @@ def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None, so
         return None
     from contentforge.script import generate
     from contentforge.script.generate import choose_shape, generate_script
-    from contentforge.script.validate import validate_script
+    from contentforge.script.validate import ValidationError, find_violations
     from contentforge.sourcing.fetch import fetch_source, save_sources
 
     if not source_urls and not sources:
@@ -113,12 +120,24 @@ def scriptwriter(topic: str, source_urls: list[str], niche=None, client=None, so
         target_words = niche.target_words if niche else (
             generate.TARGET_WORDS_LOW, generate.TARGET_WORDS_HIGH
         )
-        script = generate_script(
-            resolved, topic, srcs, choose_shape(topic),
-            system=system, target_words=target_words,
+        # The policy gate (verbatim/citation/credential) is hard. Rather than fail
+        # the whole render on the first lifted phrase, feed every violation back to
+        # the model and let it self-correct - bounded, then hard-fail so a script
+        # that is fundamentally a re-read of a source still reaches the operator.
+        violations: list[str] = []
+        for _ in range(SCRIPT_ATTEMPTS):
+            script = generate_script(
+                resolved, topic, srcs, choose_shape(topic),
+                system=system, target_words=target_words,
+                feedback=violations or None,
+            )
+            violations = find_violations(script, srcs)
+            if not violations:
+                return script
+        raise ValidationError(
+            f"script still violates policy after {SCRIPT_ATTEMPTS} attempts: "
+            + "; ".join(violations)
         )
-        validate_script(script, srcs)   # raises on verbatim, no citation, faked credentials
-        return script
 
     return write
 

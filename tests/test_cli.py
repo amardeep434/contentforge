@@ -29,7 +29,7 @@ def _mock_scriptwriter_internals(monkeypatch, seen):
         return "SCRIPT"
 
     monkeypatch.setattr("contentforge.script.generate.generate_script", fake_generate_script)
-    monkeypatch.setattr("contentforge.script.validate.validate_script", lambda s, sources: None)
+    monkeypatch.setattr("contentforge.script.validate.find_violations", lambda s, sources: [])
     monkeypatch.setattr(runtime, "llm_client", lambda: object())
 
 

@@ -248,8 +248,13 @@ pipeline make ceiling-fans --topic 'how ceiling fans work' \
 ```
 
 The transcript is source material the script **transforms**, never relays —
-`check_verbatim` rejects a script that sits too close to it, with no flag to
-disable that check. With `--topic` set and neither `--script-file` nor
+the policy gate rejects a script that sits too close to it (verbatim lifting,
+missing citations, fabricated credentials), with no flag to disable that check.
+The gate reports **every** violation at once, and the scriptwriter automatically
+regenerates up to three times, feeding the violations back to the model so it
+self-corrects; if a draft still violates after the last attempt it hard-fails to
+you — a topic that is fundamentally a re-read of one source is meant to fail, not
+be massaged past the check. With `--topic` set and neither `--script-file` nor
 `--transcript-file` given, `make` auto-uses
 `data/<niche>/videos/<slug>/meta/sources/reference-transcript.txt` when that
 file already exists (the auto-detect still needs `--topic` — without it the

@@ -76,8 +76,8 @@ def choose_shape(topic: str, previous: str | None = None) -> str:
 
 def generate_script(client: LLMClient, topic: str, sources: list[Source],
                     shape: str, system: str = SYSTEM,
-                    target_words: tuple[int, int] = (TARGET_WORDS_LOW, TARGET_WORDS_HIGH)
-                    ) -> str:
+                    target_words: tuple[int, int] = (TARGET_WORDS_LOW, TARGET_WORDS_HIGH),
+                    feedback: list[str] | None = None) -> str:
     if not sources:
         raise MissingDataError(
             f"no sources for {topic!r}; refusing to generate an ungrounded script"
@@ -94,4 +94,17 @@ def generate_script(client: LLMClient, topic: str, sources: list[Source],
         "voice and structure above. Open on the reframe in the first two "
         "sentences. Keep it grounded in the sources throughout."
     )
+    if feedback:
+        # Violation strings carry source-derived text (e.g. a source URL); flatten
+        # each to a single line so a newline in that text cannot inject its own
+        # instructions into the prompt on the retry.
+        problems = "\n".join(f"- {' '.join(problem.split())}" for problem in feedback)
+        user += (
+            "\n\nYour previous draft was rejected for these exact problems:\n"
+            + problems
+            + "\n\nRewrite the whole script fixing every one: reword any lifted "
+            "phrasing into your own words (never copy a source sentence), remove "
+            "any fabricated credential claims, and keep an inline [n] marker on "
+            "every factual claim."
+        )
     return client.complete(system, user, max_tokens=8000)

@@ -4,7 +4,7 @@ import pytest
 
 from contentforge.script.validate import (
     MAX_OVERLAP_WORDS, ValidationError, check_citations, check_credentials,
-    check_verbatim, validate_script,
+    check_verbatim, find_violations, validate_script,
 )
 from contentforge.sourcing.fetch import Source
 
@@ -59,3 +59,35 @@ def test_in_my_experience_is_rejected():
 
 def test_the_cap_is_what_the_test_says_it_is():
     assert MAX_OVERLAP_WORDS == 12
+
+
+def test_find_violations_is_empty_for_a_clean_script():
+    assert find_violations("An air fryer moves heated air quickly [1].", SOURCES) == []
+
+
+def test_find_violations_collects_all_problems_not_just_the_first():
+    # A verbatim lift AND a fabricated credential in one draft: the operator (and
+    # the retry) must see both at once, not fix one and re-discover the next.
+    script = ("Hot air is circulated by a fan around the food basket at high speed [1]. "
+              "I have spent years studying this [1].")
+    violations = find_violations(script, SOURCES)
+    assert any("verbatim" in v for v in violations)
+    assert any("credential" in v for v in violations)
+
+
+def test_find_violations_reports_a_lifted_span_once_not_every_sliding_window():
+    # The 14-word source yields 3 overlapping 12-word windows; a whole-sentence
+    # lift must surface as ONE span, not three near-duplicate messages.
+    lifted = "Hot air is circulated by a fan around the food basket at high speed [1]."
+    verbatim = [v for v in find_violations(lifted, SOURCES) if "verbatim" in v]
+    assert len(verbatim) == 1
+
+
+def test_validate_script_raises_with_every_problem_joined():
+    script = ("Hot air is circulated by a fan around the food basket at high speed [1]. "
+              "In my experience these fail [1].")
+    with pytest.raises(ValidationError) as excinfo:
+        validate_script(script, SOURCES)
+    message = str(excinfo.value)
+    assert "verbatim" in message
+    assert "credential" in message
