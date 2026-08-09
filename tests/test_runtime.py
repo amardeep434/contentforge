@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from contentforge.niche import NicheConfig
 
 
@@ -83,9 +85,54 @@ def test_scriptwriter_uses_prebuilt_transcript_source(tmp_path, monkeypatch):
         return "SCRIPT"
 
     monkeypatch.setattr("contentforge.script.generate.generate_script", fake_generate_script)
-    monkeypatch.setattr("contentforge.script.validate.validate_script", lambda s, sources: None)
+    monkeypatch.setattr("contentforge.script.validate.find_violations", lambda s, sources: [])
     monkeypatch.setattr("contentforge.sourcing.fetch.save_sources", lambda sources, run_dir: None)
     monkeypatch.setattr(runtime, "llm_client", lambda: object())
     writer = runtime.scriptwriter("T", [], sources=[src])
     assert writer(tmp_path) == "SCRIPT"
     assert seen["sources"][0].text == "TRANSCRIPT"     # the transcript, not a fetched URL
+
+
+def test_scriptwriter_retries_feeding_back_the_violations_until_it_validates(tmp_path, monkeypatch):
+    from contentforge import runtime
+    src = runtime.source_from_transcript("T", "TRANSCRIPT")
+    feedback_seen = []
+
+    def fake_generate_script(client, topic, sources, shape, **kw):
+        feedback_seen.append(kw.get("feedback"))
+        return "BAD" if len(feedback_seen) == 1 else "GOOD"
+
+    def fake_find_violations(script, sources):
+        return ["reproduces 12 words verbatim"] if script == "BAD" else []
+
+    monkeypatch.setattr("contentforge.script.generate.generate_script", fake_generate_script)
+    monkeypatch.setattr("contentforge.script.validate.find_violations", fake_find_violations)
+    monkeypatch.setattr("contentforge.sourcing.fetch.save_sources", lambda sources, run_dir: None)
+    monkeypatch.setattr(runtime, "llm_client", lambda: object())
+
+    writer = runtime.scriptwriter("T", [], sources=[src])
+    assert writer(tmp_path) == "GOOD"
+    assert feedback_seen[0] is None                              # first draft: no feedback
+    assert feedback_seen[1] == ["reproduces 12 words verbatim"]  # second: fed the violation
+
+
+def test_scriptwriter_hard_fails_after_the_attempt_cap(tmp_path, monkeypatch):
+    from contentforge import runtime
+    from contentforge.script.validate import ValidationError
+    src = runtime.source_from_transcript("T", "TRANSCRIPT")
+    calls = []
+
+    def fake_generate_script(client, topic, sources, shape, **kw):
+        calls.append(1)
+        return "BAD"
+
+    monkeypatch.setattr("contentforge.script.generate.generate_script", fake_generate_script)
+    monkeypatch.setattr("contentforge.script.validate.find_violations",
+                        lambda script, sources: ["still verbatim"])
+    monkeypatch.setattr("contentforge.sourcing.fetch.save_sources", lambda sources, run_dir: None)
+    monkeypatch.setattr(runtime, "llm_client", lambda: object())
+
+    writer = runtime.scriptwriter("T", [], sources=[src])
+    with pytest.raises(ValidationError, match="after"):
+        writer(tmp_path)
+    assert len(calls) == runtime.SCRIPT_ATTEMPTS   # bounded, does not loop forever
