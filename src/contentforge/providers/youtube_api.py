@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from contentforge.errors import MissingDataError
-from contentforge.provenance import Fact, Provenance
+from contentforge.provenance import Fact, Provenance, require_facts
 from contentforge.providers.quota import QuotaLedger
 
 API_ROOT = "https://www.googleapis.com/youtube/v3"
@@ -69,6 +69,11 @@ class ChannelStats:
     view_count: Fact
     published_at: Fact
 
+    def __post_init__(self) -> None:
+        require_facts(
+            self, "subscribers", "video_count", "view_count", "published_at"
+        )
+
 
 @dataclass(frozen=True)
 class VideoRecord:
@@ -79,6 +84,9 @@ class VideoRecord:
     view_count: Fact
     duration_seconds: Fact
     provenance: Provenance
+
+    def __post_init__(self) -> None:
+        require_facts(self, "published_at", "view_count", "duration_seconds")
 
 
 def _provenance(endpoint: str, params: dict, body: dict) -> Provenance:

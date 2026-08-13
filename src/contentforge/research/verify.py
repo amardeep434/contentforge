@@ -12,7 +12,7 @@ rest.
 from dataclasses import dataclass
 
 from contentforge.errors import MissingDataError
-from contentforge.provenance import Fact
+from contentforge.provenance import Fact, require_facts
 from contentforge.providers.quota import QuotaLedger
 from contentforge.providers.youtube_api import YouTubeClient
 
@@ -30,6 +30,11 @@ class ChannelFacts:
     view_count: Fact
     video_count: Fact
     published_at: Fact
+
+    def __post_init__(self) -> None:
+        require_facts(
+            self, "subscribers", "view_count", "video_count", "published_at"
+        )
 
     @property
     def views_per_video(self) -> float:

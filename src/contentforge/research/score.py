@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from statistics import median
 
 from contentforge.errors import MissingDataError
-from contentforge.provenance import Fact
+from contentforge.provenance import Fact, require_facts
 from contentforge.research.niches import Niche
 
 # Made for Kids removes Super Thanks and Memberships, so the Tier 1 revenue path
@@ -36,6 +36,9 @@ class NicheScore:
     breakout_rate: float
     median_lift: float
     membership_factor: float
+
+    def __post_init__(self) -> None:
+        require_facts(self, "rpm_usd")
 
 
 def score_niche(niche: Niche, trajectories: list, rpm_usd: Fact) -> NicheScore:

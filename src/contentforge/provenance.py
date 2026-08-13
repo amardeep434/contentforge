@@ -1,9 +1,11 @@
 """Provenance core.
 
 Every factual value in this pipeline is a Fact carrying the source it came from.
-`require_provenance` is the gate between stages: it refuses anything whose leaves
-are not Facts, so an invented or defaulted number cannot travel downstream
-disguised as retrieved data.
+The guarantee is enforced two ways: Provenance validates itself on construction
+(no empty source, no naive timestamp), and Fact cannot be built without a
+Provenance. Stages that consume facts declare their fields as Fact, so the type
+checker refuses an invented or defaulted number at the boundary — no runtime
+leaf-scan needed.
 """
 
 from dataclasses import dataclass
@@ -38,16 +40,13 @@ class Fact:
     provenance: Provenance
 
 
-def require_provenance(obj: Any) -> None:
-    """Raise UnprovenancedError unless every leaf of obj is a Fact."""
-    if isinstance(obj, Fact):
-        return
-    if isinstance(obj, dict):
-        for value in obj.values():
-            require_provenance(value)
-        return
-    if isinstance(obj, (list, tuple, set)):
-        for item in obj:
-            require_provenance(item)
-        return
-    raise UnprovenancedError(f"value without provenance: {obj!r}")
+def require_facts(obj: Any, *names: str) -> None:
+    """Raise UnprovenancedError unless each named field of obj is a Fact.
+
+    The runtime teeth behind the Fact type. Dataclasses here mix Facts with
+    plain strings (a title is not a measurement), so the check is selective:
+    only the fields that carry retrieved values are asserted, by name.
+    """
+    for name in names:
+        if not isinstance(getattr(obj, name), Fact):
+            raise UnprovenancedError(f"{type(obj).__name__}.{name} is not a Fact")
