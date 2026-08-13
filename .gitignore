@@ -47,3 +47,6 @@ data/leads/
 
 # Serena MCP per-project cache (auto-generated when the serena MCP server runs here)
 .serena/
+
+# graphify knowledge-graph output
+graphify-out/
